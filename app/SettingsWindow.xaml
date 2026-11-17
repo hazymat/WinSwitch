@@ -78,10 +78,11 @@
         <StackPanel Margin="20,8,20,16" MaxWidth="760" HorizontalAlignment="Left">
           <Border Style="{StaticResource Card}">
             <StackPanel>
-              <TextBlock Text="Start and tray" Style="{StaticResource CardTitle}" />
-              <CheckBox x:Name="startWithWindowsBox" Content="Start with Windows" />
-              <WrapPanel Margin="0,12,0,0"><TextBlock Text="Profile changes" VerticalAlignment="Center" Margin="0,0,10,0" />
-                <ComboBox x:Name="notificationsCombo" MinWidth="200"><ComboBoxItem Content="Show a card" Tag="all" /><ComboBoxItem Content="Questions only" Tag="questions" /></ComboBox></WrapPanel>
+              <TextBlock Text="Start and notifications" Style="{StaticResource CardTitle}" />
+              <CheckBox x:Name="startWithWindowsBox" Content="Start WinSwitch when I sign in to Windows" />
+              <TextBlock Style="{StaticResource Quiet}" Text="WinSwitch runs in the tray while you're signed in. To keep it working when nobody is signed in (remote control, a server), also install the helper, a small Windows service." />
+              <TextBlock Text="When the profile changes" Margin="0,14,0,4" />
+              <ComboBox x:Name="notificationsCombo" MinWidth="360" HorizontalAlignment="Left"><ComboBoxItem Content="Tell me with a small card above the clock" Tag="all" /><ComboBoxItem Content="Change quietly (cards only when WinSwitch needs an answer)" Tag="questions" /></ComboBox>
             </StackPanel>
           </Border>
           <Border Style="{StaticResource Card}">
