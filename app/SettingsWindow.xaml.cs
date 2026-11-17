@@ -50,7 +50,7 @@ public partial class SettingsWindow : Window
 
     public void SelectTab(string tabName, string profileId = "")
     {
-        var tabByName = new Dictionary<string, TabItem> { ["Profiles"] = profilesTab, ["Tweaks"] = tweaksTab, ["Situations"] = situationsTab, ["Original"] = originalTab, ["Phone"] = phoneTab, ["HomeAssistant"] = mqttTab, ["Allowed"] = allowedTab, ["RemoteLog"] = remoteLogTab, ["General"] = generalTab, ["Helper"] = helperTab, ["About"] = aboutTab };
+        var tabByName = new Dictionary<string, TabItem> { ["Profiles"] = profilesTab, ["Tweaks"] = tweaksTab, ["Situations"] = situationsTab, ["Original"] = originalTab, ["Phone"] = phoneTab, ["HomeAssistant"] = mqttTab, ["Automation"] = mqttTab, ["Allowed"] = allowedTab, ["RemoteLog"] = remoteLogTab, ["General"] = generalTab, ["Helper"] = helperTab, ["About"] = aboutTab };
         if (tabByName.TryGetValue(tabName, out var selectedTab)) settingsTabs.SelectedItem = selectedTab;
         if (profileId != "") { selectedProfileId = profileId; FillProfiles(); }
     }

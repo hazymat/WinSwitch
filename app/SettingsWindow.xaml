@@ -75,7 +75,7 @@
     <TabItem Header="Phone and Shortcuts" x:Name="phoneTab">
       <ScrollViewer VerticalScrollBarVisibility="Auto"><StackPanel x:Name="phonePage" Margin="20,8,20,16" MaxWidth="820" HorizontalAlignment="Left" /></ScrollViewer>
     </TabItem>
-    <TabItem Header="Home Assistant" x:Name="mqttTab">
+    <TabItem Header="Automation" x:Name="mqttTab">
       <ScrollViewer VerticalScrollBarVisibility="Auto"><StackPanel x:Name="mqttPage" Margin="20,8,20,16" MaxWidth="820" HorizontalAlignment="Left" /></ScrollViewer>
     </TabItem>
     <TabItem Header="Allowed actions" x:Name="allowedTab">

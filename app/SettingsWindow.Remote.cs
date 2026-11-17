@@ -106,38 +106,42 @@ public partial class SettingsWindow
     }
 
     // ---- Home Assistant (MQTT) ----
+    // Automation: the MQTT broker connection, then Home Assistant (on or off) and the raw topics for Node-RED and other tools (Mat 17 Nov)
     void FillMqtt()
     {
         mqttPage.Children.Clear();
-        mqttPage.Children.Add(Callout("Home Assistant sees this PC as a device: a Profile picker, a switch for each tweak, power buttons, volume, and battery and plugged-in sensors. It connects through your MQTT broker (for example the Mosquitto add-on). Node-RED and other tools can use the same topics."));
+        // MQTT broker
         var onBox = new CheckBox { Content = "Connect to an MQTT broker", IsChecked = Remote.MqttOn, FontWeight = FontWeights.SemiBold };
         var hostBox = new TextBox { Text = Remote.MqttHost, Width = 240 }; var portBox = new TextBox { Text = Remote.MqttPort.ToString(), Width = 70 };
         var userBox = new TextBox { Text = Remote.MqttUser, Width = 240 }; var passwordBox = new PasswordBox { Password = RemoteControl.MqttPassword, Width = 240 };
-        var tlsBox = new CheckBox { Content = "Use TLS (encrypted)", IsChecked = Remote.MqttTls }; var discoveryBox = new CheckBox { Content = "Let Home Assistant find this PC (discovery)", IsChecked = Remote.HomeAssistantDiscovery };
+        var tlsBox = new CheckBox { Content = "Use TLS (encrypted)", IsChecked = Remote.MqttTls };
         var topicBox = new TextBox { Text = Remote.MqttTopic, Width = 240 };
         var fields = new Grid { Margin = new Thickness(0, 10, 0, 0) };
         fields.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(150) }); fields.ColumnDefinitions.Add(new ColumnDefinition());
         void Field(string label, UIElement input) { fields.RowDefinitions.Add(new RowDefinition()); var row = fields.RowDefinitions.Count - 1; var caption = Text(label, 13, false, null, new Thickness(0, 6, 0, 6)); Grid.SetRow(caption, row); fields.Children.Add(caption); ((FrameworkElement)input).HorizontalAlignment = HorizontalAlignment.Left; ((FrameworkElement)input).Margin = new Thickness(0, 4, 0, 4); Grid.SetRow(input, row); Grid.SetColumn(input, 1); fields.Children.Add(input); }
         Field("Broker address", hostBox); Field("Port", portBox); Field("User name", userBox); Field("Password", passwordBox);
-        var more = new Expander { Header = "More", Style = (Style)FindResource("More"), Content = new StackPanel { Children = { tlsBox, discoveryBox, new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 8, 0, 0), Children = { Text("Topic starts with", 13, false, null, new Thickness(0, 3, 10, 0)), topicBox } } } } };
+        var more = new Expander { Header = "More", Style = (Style)FindResource("More"), Content = new StackPanel { Children = { tlsBox, new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 8, 0, 0), Children = { Text("Topic starts with", 13, false, null, new Thickness(0, 3, 10, 0)), topicBox } } } } };
         mqttStatusText = Text(App.Mqtt.Status, 12.5, false, quietBrush, new Thickness(0, 10, 0, 0));
         var connect = Button(Remote.MqttOn ? "Save and reconnect" : "Save", async () =>
         {
             Remote.MqttOn = onBox.IsChecked == true; Remote.MqttHost = hostBox.Text.Trim(); Remote.MqttPort = int.TryParse(portBox.Text, out var port) ? port : 1883; Remote.MqttUser = userBox.Text.Trim(); RemoteControl.MqttPassword = passwordBox.Password;
-            Remote.MqttTls = tlsBox.IsChecked == true; Remote.HomeAssistantDiscovery = discoveryBox.IsChecked == true; Remote.MqttTopic = topicBox.Text.Trim() == "" ? "winswitch" : topicBox.Text.Trim();
+            Remote.MqttTls = tlsBox.IsChecked == true; Remote.MqttTopic = topicBox.Text.Trim() == "" ? "winswitch" : topicBox.Text.Trim();
             Settings.Save(); await App.Mqtt.ApplyAsync(); FillMqtt();
         }, true);
         connect.HorizontalAlignment = HorizontalAlignment.Left; connect.Margin = new Thickness(0, 12, 0, 0);
-        mqttPage.Children.Add(Card(new StackPanel { Children = { onBox, fields, more, connect, mqttStatusText } }));
+        mqttPage.Children.Add(Card(new StackPanel { Children = { Text("MQTT broker", 14.5, true, null, new Thickness(0, 0, 0, 8)), onBox, fields, more, connect, mqttStatusText } }));
+        // Home Assistant
+        var haBox = new CheckBox { Content = "Show this PC in Home Assistant", IsChecked = Remote.HomeAssistantDiscovery, FontWeight = FontWeights.SemiBold, IsEnabled = Remote.MqttOn };
+        haBox.Click += async (sender, args) => { Remote.HomeAssistantDiscovery = haBox.IsChecked == true; Settings.Save(); await App.Mqtt.ApplyAsync(); };
+        var ha = new StackPanel { Children = { Text("Home Assistant", 14.5, true, null, new Thickness(0, 0, 0, 8)), haBox, Text(Remote.MqttOn ? "Profile picker, a switch per tweak, power buttons, volume, battery." : "Connect to your MQTT broker first (for example Home Assistant's Mosquitto add-on).", 12.5, false, quietBrush, new Thickness(20, 2, 0, 0)) } };
+        var mac = RemoteControl.WiredMac();
+        ha.Children.Add(new Expander { Header = "Turning the PC on", Style = (Style)FindResource("More"), Margin = new Thickness(0, 10, 0, 0), Content = Text(mac == "" ? "Only possible over a network cable (Wake on LAN). This PC has no wired network adapter now." : $"Use Home Assistant's Wake on LAN integration with {mac}. Wake on LAN must be on in the network adapter (the helper can turn it on).", 12.5, false, quietBrush, new Thickness(0, 6, 0, 0)) });
+        mqttPage.Children.Add(Card(ha));
         // Topics, for Node-RED and anything else
         var topics = new StackPanel();
-        topics.Children.Add(Text("Topics", 14.5, true, null, new Thickness(0, 0, 0, 6)));
         foreach (var (what, topic, payload) in new[] { ("State (JSON, kept)", MqttLink.StateTopic, ""), ("Switch profile", MqttLink.CommandTopic("profile"), "Desk, or Automatic"), ("Tweak on or off", MqttLink.CommandTopic("tweak/<id>"), "ON or OFF"), ("Power", MqttLink.CommandTopic("power"), "screenoff, lock, sleep, hibernate, restart, shutdown"), ("Volume", MqttLink.CommandTopic("volume"), "0 to 100"), ("Mute", MqttLink.CommandTopic("mute"), "ON or OFF"), ("Keep awake", MqttLink.CommandTopic("awake"), "ON, OFF, or minutes") })
             topics.Children.Add(new WrapPanel { Margin = new Thickness(0, 2, 0, 2), Children = { Text(what, 12.5, false, null, new Thickness(0, 0, 10, 0)), new TextBlock { Text = topic, FontFamily = new FontFamily("Cascadia Mono, Consolas"), FontSize = 11.5, Margin = new Thickness(0, 1, 10, 0) }, Text(payload, 12, false, quietBrush) } });
         mqttPage.Children.Add(Card(new Expander { Header = "Topics for Node-RED and other tools", Style = (Style)FindResource("More"), Margin = new Thickness(0), Content = topics }));
-        // Turning it on remotely
-        var mac = RemoteControl.WiredMac();
-        mqttPage.Children.Add(Card(new StackPanel { Children = { Text("Turning the PC on", 14.5, true, null, new Thickness(0, 0, 0, 6)), Text(mac == "" ? "A PC that's off can only be woken over a network cable (Wake on LAN). This PC has no wired network adapter now." : $"A PC that's off can't listen for anything, so turning it on is Wake on LAN, sent by Home Assistant's Wake on LAN integration to this address: {mac}. Wake on LAN has to be on in the network adapter; the helper can turn it on.", 12.5, false, quietBrush) } }));
     }
     TextBlock? mqttStatusText;
     void OnMqttStatus() { if (mqttStatusText != null) mqttStatusText.Text = App.Mqtt.Status; }
