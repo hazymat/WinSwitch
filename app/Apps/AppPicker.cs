@@ -25,9 +25,11 @@ public sealed class AppPicker : Window
         var browseButton = new Button { Content = "Browse for a program…", Padding = new Thickness(12, 4, 12, 4) };
         browseButton.Click += (sender, args) => Browse();
         var cancelButton = new Button { Content = "Cancel", Padding = new Thickness(14, 4, 14, 4), Margin = new Thickness(8, 0, 0, 0), IsCancel = true };
-        addButton.Click += (sender, args) => { foreach (var path in picked) Chosen.Add(new AppToStop { Path = path, Name = choices.FirstOrDefault(choice => choice.Path.Equals(path, StringComparison.OrdinalIgnoreCase))?.Name ?? AppCatalog.FriendlyName(path) }); DialogResult = true; };
+        // One choice for everything added this time (Mat 17 Nov: changing each to On battery was tedious)
+        var whenBox = new ComboBox { Width = 150, Margin = new Thickness(0, 0, 10, 0), VerticalAlignment = VerticalAlignment.Center, Items = { new ComboBoxItem { Content = "Stop always" }, new ComboBoxItem { Content = "Stop on battery" } }, SelectedIndex = 1 };
+        addButton.Click += (sender, args) => { foreach (var path in picked) Chosen.Add(new AppToStop { Path = path, Name = choices.FirstOrDefault(choice => choice.Path.Equals(path, StringComparison.OrdinalIgnoreCase))?.Name ?? AppCatalog.FriendlyName(path), OnBatteryOnly = whenBox.SelectedIndex == 1 }); DialogResult = true; };
         var buttons = new DockPanel { Margin = new Thickness(0, 12, 0, 0), Children = { browseButton } };
-        var right = new StackPanel { Orientation = Orientation.Horizontal, Children = { addButton, cancelButton } };
+        var right = new StackPanel { Orientation = Orientation.Horizontal, Children = { whenBox, addButton, cancelButton } };
         DockPanel.SetDock(right, Dock.Right); buttons.Children.Insert(0, right); DockPanel.SetDock(browseButton, Dock.Left);
         var hint = new TextBlock { Text = "Background apps are stopped straight away; apps with a window ask first. They start again when you switch to a profile that doesn't stop them.", Foreground = quietBrush, FontSize = 12, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 10) };
         var root = new DockPanel { Margin = new Thickness(16) };
