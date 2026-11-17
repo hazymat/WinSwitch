@@ -8,7 +8,7 @@ public static class Templates
     public static readonly string[] Colours = { "#2F7FD8", "#3FAE68", "#E0812F", "#8E6AD8", "#D2475A", "#2BA6A6", "#9AA1AB" };
 
     // Everything as it was before WinSwitch, every setting filled in
-    public static Profile Starting(Snapshot snapshot) => new() { Name = "Starting profile", Colour = "#9AA1AB", IsStarting = true, Values = snapshot.Values.ToDictionary(entry => entry.Key, entry => entry.Value.Clone()) };
+    public static Profile Starting(Snapshot snapshot) => new() { Name = "Starting profile", Colour = "#9AA1AB", IsStarting = true, Values = snapshot.Values.ToDictionary(entry => entry.Key, entry => entry.Value.Clone()), SoundOutput = snapshot.SoundOutputId, SoundOutputName = snapshot.SoundOutput };
 
     public static void Set(Profile profile, string key, int? pluggedIn, int? onBattery)
     {
@@ -49,6 +49,7 @@ public static class Templates
         if (lidAway == 0) Set(profile, "hibernateAfter", 0, 3600); // sleep, then hibernate after an hour asleep
         Set(profile, "standbyNetwork", null, 0); // no network while asleep in the bag
         Set(profile, "graphics", null, 1); Set(profile, "videoPlayback", null, 2); // on battery: the power-saving graphics chip, video tuned for battery
+        Set(profile, "wakeInput", 0, null); // a mouse in the bag doesn't wake it (helper only; skipped without it)
         ApplySpeed(profile, true, 2); ApplySpeed(profile, false, batteryPriority);
         return profile;
     }

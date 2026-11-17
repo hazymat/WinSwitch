@@ -115,6 +115,9 @@
         </StackPanel>
       </ScrollViewer>
     </TabItem>
+    <TabItem Header="Helper" x:Name="helperTab">
+      <ScrollViewer VerticalScrollBarVisibility="Auto"><StackPanel x:Name="helperPage" Margin="20,8,20,16" MaxWidth="760" HorizontalAlignment="Left" /></ScrollViewer>
+    </TabItem>
     <TabItem Header="About" x:Name="aboutTab">
       <ScrollViewer VerticalScrollBarVisibility="Auto">
         <StackPanel Margin="20,8,20,16">

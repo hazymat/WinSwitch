@@ -61,6 +61,8 @@ Two parts sharing one engine library (`WinSwitch.Core`):
 
 When the helper is installed, it owns remote control and profile switching (so a server or a signed-out laptop still answers), and the tray app becomes its window onto it over a local named pipe that only the signed-in user and admins can open.
 
+**Built so far (helper 1.0.0):** `helper/`, a .NET Framework 4.8 service (every Windows 10/11 has it, so one ~30 KB exe), carried inside WinSwitch and installed from Settings › App › Helper with one admin prompt. Commands: state, device (allow off / allow wake per device), wake-devices (mouse and keyboard, per profile as "Mouse and keyboard can wake the PC"), wol, hibernate, fast-startup, service, end-process, run-task, power, firewall, restore, uninstall. Changing services, ending processes, tasks, firewall, hibernate and fast startup need the caller to be in Administrators (elevated or not). It captures its own original values in `C:\ProgramData\WinSwitch\helper-original.json` on first start and puts them back on Remove and on WinSwitch's uninstall. Its log is `C:\ProgramData\WinSwitch\helper.log`. Not yet: remote control while signed out (the helper answering the phone page and MQTT itself).
+
 **Helper security.** It runs as LocalSystem, so its files live in `C:\Program Files\WinSwitch Helper` (admin-only), never in the user-writable Velopack folder, otherwise any program could swap the exe and get SYSTEM. It accepts only a fixed list of commands (switch profile, set a known setting, power actions), never paths or command lines. The helper is kept small and changes rarely; when an update carries a new helper version, the tray shows "Update the helper" with one admin prompt.
 
 ## Tray
@@ -125,7 +127,7 @@ Settings › Profiles is a list of profile cards on the left and the chosen prof
 
 **Sound**
 - Volume and mute
-- Default output device (dock speakers at the desk, laptop speakers away)
+- Default output device (dock speakers at the desk, laptop speakers away): Sound card, "Switch the sound output" tick then a list of outputs; one choice for both power sources, set before volume; left alone when that device isn't plugged in
 
 **Hibernate and startup** (helper): Hibernate available, Fast startup.
 
@@ -258,7 +260,7 @@ A Dell XPS 17 on Windows 11 26H2, on a USB-C dock. What it taught the design:
 
 The last page shows what it will make, as plain sentences you can change before pressing **Create**: "Desk (on the Home dock): screen off after 30 min, never sleeps, full CPU", "Out and about: …", "Night tweak 22:00 to 07:00: screen off after 2 min, volume down 20%". Run it again any time from Settings › Profiles › Set up with the wizard (it offers to replace or add).
 
-**3. Suggestions.** Afterwards WinSwitch suggests improvements from what it notices, at most one a week, as a tip and a callout in Settings › Profiles with Accept and No thanks (never asked twice):
+**3. Suggestions.** Afterwards WinSwitch suggests improvements from what it notices, at most one a week, as a tip and a callout in Settings › Profiles with Accept and No thanks (never asked twice). Built: battery drained 10% or more over 2+ hours asleep, brightness turned by hand on battery to about the same level on 3 days, Wi-Fi on while a network cable is in on 3 days (a new dock is asked about when it first appears instead):
 - "You plug into the same dock every evening. Make it a situation?"
 - "The battery dropped 18% asleep in your bag last night. Hibernate after 1 hour asleep on battery?"
 - "The screen is always set to full brightness by hand on battery. Save that to Out and about?"

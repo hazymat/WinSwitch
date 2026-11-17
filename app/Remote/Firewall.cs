@@ -21,6 +21,7 @@ public static class Firewall
     // One admin prompt; replaces any older rule (e.g. another port)
     public static async Task<bool> AllowAsync(int port)
     {
+        if (Shell.HelperClient.Installed && await Shell.HelperClient.DoAsync("firewall", new { port, program = AppPaths.ExePath, on = true })) return await RuleExistsAsync(); // no prompt with the helper
         var commands = $"/c netsh advfirewall firewall delete rule name=\"{RuleName}\" & netsh advfirewall firewall add rule name=\"{RuleName}\" dir=in action=allow protocol=TCP localport={port} profile=private program=\"{AppPaths.ExePath}\"";
         try { using var elevated = Process.Start(new ProcessStartInfo("cmd.exe", commands) { UseShellExecute = true, Verb = "runas", WindowStyle = ProcessWindowStyle.Hidden })!; await elevated.WaitForExitAsync(); }
         catch { return false; } // permission declined

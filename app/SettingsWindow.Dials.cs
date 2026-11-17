@@ -84,14 +84,39 @@ public partial class SettingsWindow
             if (Available("graphics")) tiles.Children.Add(ToggleTile(profile, "graphics", side, "", "Graphics", 1, 2, "Power-saving chip", "Full performance"));
             if (Available("videoPlayback")) tiles.Children.Add(ToggleTile(profile, "videoPlayback", side, "", "Video", 2, 0, "Tuned for battery", "Best picture"));
             body.Children.Add(tiles);
-            AddMore(body, profile, Catalog.Wireless, new[] { "wifi", "bluetooth", "mobile", "graphics", "videoPlayback" });
+            AddMore(body, profile, Catalog.Wireless, new[] { "wifi", "bluetooth", "mobile", "graphics", "videoPlayback", "wakeInput" });
         }
         // ---- Sound ----
         if (Available("volume"))
         {
             var body = DialCard(page, "", Catalog.Sound, profile);
             body.Children.Add(SetItRow(profile, "volume", side, "", "Volume", "Set the volume", Enumerable.Range(0, 21).Select(step => step * 5).ToArray(), value => $"{value}%", (Value(profile, "volume", side) ?? Direct.Volume() ?? 30) / 5 * 5, null));
+            body.Children.Add(OutputRow(profile));
         }
+    }
+
+    // Sound output: a tick, then the outputs plugged in now (plus the chosen one if it isn't); one choice for both power sources
+    FrameworkElement OutputRow(Profile profile)
+    {
+        var outputs = Direct.Outputs();
+        if (profile.SoundOutput != "" && !outputs.Any(output => output.id == profile.SoundOutput)) outputs.Add((profile.SoundOutput, $"{profile.SoundOutputName} (not plugged in)"));
+        var row = new StackPanel { Margin = new Thickness(0, 0, 0, 4) };
+        var tick = new CheckBox { Content = "Switch the sound output", IsChecked = profile.SoundOutput != "", Margin = new Thickness(0, 0, 0, 4) };
+        var picker = new ComboBox { ItemsSource = outputs.Select(output => output.name).ToList(), Margin = new Thickness(22, 0, 0, 0), MaxWidth = 380, HorizontalAlignment = HorizontalAlignment.Left, Visibility = profile.SoundOutput != "" ? Visibility.Visible : Visibility.Collapsed };
+        picker.SelectedIndex = Math.Max(0, outputs.FindIndex(output => output.id == (profile.SoundOutput != "" ? profile.SoundOutput : Direct.OutputId())));
+        void Choose() { if (picker.SelectedIndex < 0 || picker.SelectedIndex >= outputs.Count) return; profile.SoundOutput = outputs[picker.SelectedIndex].id; profile.SoundOutputName = outputs[picker.SelectedIndex].name.Replace(" (not plugged in)", ""); Changed(); }
+        picker.SelectionChanged += (sender, args) => { if (tick.IsChecked == true) Choose(); };
+        var note = Text("Left as you have it.", 12, false, quietBrush, new Thickness(22, 0, 0, 0));
+        note.Visibility = profile.SoundOutput == "" ? Visibility.Visible : Visibility.Collapsed;
+        tick.Click += (sender, args) =>
+        {
+            var on = tick.IsChecked == true;
+            picker.Visibility = on ? Visibility.Visible : Visibility.Collapsed; note.Visibility = on ? Visibility.Collapsed : Visibility.Visible;
+            if (on) Choose(); else { profile.SoundOutput = ""; profile.SoundOutputName = ""; Changed(); }
+        };
+        if (outputs.Count == 0) { tick.IsEnabled = false; note.Text = "No sound outputs found."; }
+        row.Children.Add(tick); row.Children.Add(picker); row.Children.Add(note);
+        return row;
     }
 
     static double DimFor(int brightness) => (100 - Math.Clamp(brightness, 0, 100)) / 100.0 * 0.8;

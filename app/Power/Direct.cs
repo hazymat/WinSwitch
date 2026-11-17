@@ -79,6 +79,33 @@ public static class Direct
     public static bool? Muted() { using var output = DefaultOutput(); return output?.AudioEndpointVolume.Mute; }
     public static bool SetMuted(bool muted) { using var output = DefaultOutput(); if (output == null) return false; output.AudioEndpointVolume.Mute = muted; return true; }
     public static string OutputName() { using var output = DefaultOutput(); return output?.FriendlyName ?? ""; }
+    public static string OutputId() { using var output = DefaultOutput(); return output?.ID ?? ""; }
+
+    // ---- Sound output: the plugged-in outputs, and making one the default for everything (the interface every sound switcher uses; checked by reading back) ----
+    public static List<(string id, string name)> Outputs()
+    {
+        try { return new MMDeviceEnumerator().EnumerateAudioEndPoints(DataFlow.Render, DeviceState.Active).Select(device => { using (device) return (device.ID, device.FriendlyName); }).OrderBy(device => device.FriendlyName).ToList(); }
+        catch { return new(); }
+    }
+
+    public static bool SetOutput(string id)
+    {
+        if (OutputId() == id) return true;
+        if (!Outputs().Any(output => output.id == id)) return false; // not plugged in now
+        try { var policy = (IPolicyConfig)new PolicyConfigClient(); for (var role = 0; role < 3; role++) policy.SetDefaultEndpoint(id, role); }
+        catch { return false; }
+        return OutputId() == id;
+    }
+
+    [System.Runtime.InteropServices.ComImport, System.Runtime.InteropServices.Guid("870af99c-171d-4f9e-af0d-e63df40c2bc9")] class PolicyConfigClient { }
+    [System.Runtime.InteropServices.ComImport, System.Runtime.InteropServices.Guid("f8679f50-850a-41cf-9c72-430f290290c8"), System.Runtime.InteropServices.InterfaceType(System.Runtime.InteropServices.ComInterfaceType.InterfaceIsIUnknown)]
+    interface IPolicyConfig
+    {
+        // Only SetDefaultEndpoint is used; the slots before it keep the vtable in order
+        [PreserveSig] int GetMixFormat(); [PreserveSig] int GetDeviceFormat(); [PreserveSig] int ResetDeviceFormat(); [PreserveSig] int SetDeviceFormat(); [PreserveSig] int GetProcessingPeriod(); [PreserveSig] int SetProcessingPeriod(); [PreserveSig] int GetShareMode(); [PreserveSig] int SetShareMode(); [PreserveSig] int GetPropertyValue(); [PreserveSig] int SetPropertyValue();
+        [PreserveSig] int SetDefaultEndpoint([System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.LPWStr)] string deviceId, int role);
+        [PreserveSig] int SetEndpointVisibility();
+    }
 
     // ---- Battery health: how much it holds now against when new (the same figures as Windows' battery report) ----
     public static int? BatteryHealth()
