@@ -75,9 +75,9 @@ public static class RemoteControl
                 App.Engine.SetTweak(tweak, Flag("on") ?? !App.Engine.TweakIsOn(tweak)); return (true, tweak.Name);
             case "volume":
                 var level = Number("level") ?? (Number("change") is { } change ? (Direct.Volume() ?? 0) + change : null);
-                return level == null ? (false, "Give level (0 to 100) or change (e.g. -10)") : (Direct.SetVolume(Math.Clamp(level.Value, 0, 100)), $"{Math.Clamp(level.Value, 0, 100)}%");
-            case "mute": return (Direct.SetMuted(Flag("on") ?? !(Direct.Muted() ?? false)), "");
-            case "brightness": return Number("level") is { } brightness ? (Direct.SetBrightness(brightness), $"{brightness}%") : (false, "Give level (0 to 100)");
+                return level == null ? (false, "Give level (0 to 100) or change (e.g. -10)") : (Shell.Osd.SetVolume(Math.Clamp(level.Value, 0, 100)), $"{Math.Clamp(level.Value, 0, 100)}%");
+            case "mute": return (Shell.Osd.SetMuted(Flag("on") ?? !(Direct.Muted() ?? false)), "");
+            case "brightness": return Number("level") is { } brightness ? (Shell.Osd.SetBrightness(Math.Clamp(brightness, 0, 100)), $"{Math.Clamp(brightness, 0, 100)}%") : (false, "Give level (0 to 100)");
             case "awake":
                 var minutes = Number("minutes");
                 if (Flag("on") == false || minutes == 0 && body?["minutes"] != null) Shell.PowerActions.StopKeepingAwake();
