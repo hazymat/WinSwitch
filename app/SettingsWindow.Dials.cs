@@ -181,7 +181,7 @@ public partial class SettingsWindow
     FrameworkElement StopsRow(Profile profile, string key, bool side, string glyph, string label, int[] stops, Func<int, string> stopLabel)
     {
         var setting = Catalog.Find(key)!;
-        var value = Value(profile, key, side); var fallback = Fallback(profile, key, side);
+        var value = Catalog.AsTime(Value(profile, key, side)); var fallback = Catalog.AsTime(Fallback(profile, key, side));
         var shown = value ?? fallback;
         if (shown is { } extra && !stops.Contains(extra)) stops = stops.Where(stop => stop != 0).Append(extra).OrderBy(stop => stop).Concat(stops.Contains(0) ? new[] { 0 } : Array.Empty<int>()).Distinct().ToArray();
         var row = new StackPanel { Margin = new Thickness(0, 0, 0, 14) };

@@ -18,7 +18,7 @@ public static class RemoteControl
     // Every action, with the words Settings › Allowed actions shows
     public static readonly (string key, string label)[] Actions =
     {
-        ("profile", "Switch profile (or back to Automatic)"), ("tweak", "Turn tweaks on and off (e.g. Night)"), ("volume", "Volume"), ("mute", "Mute"), ("brightness", "Laptop screen brightness"), ("awake", "Keep awake"),
+        ("profile", "Switch profile (or back to Automatic)"), ("tweak", "Turn tweaks on and off (e.g. Night)"), ("volume", "Volume"), ("mute", "Mute"), ("brightness", "Laptop screen brightness"), ("awake", "Keep awake"), ("media", "Play, pause, next and previous"),
         ("screenoff", "Screen off"), ("lock", "Lock"), ("sleep", "Sleep"), ("hibernate", "Hibernate"), ("restart", "Restart"), ("shutdown", "Shut down"),
     };
     public static readonly string[] PowerActions = { "screenoff", "lock", "sleep", "hibernate", "restart", "shutdown" };
@@ -39,6 +39,7 @@ public static class RemoteControl
             ["pluggedIn"] = pluggedIn, ["hasBattery"] = hasBattery, ["battery"] = hasBattery ? percent : null,
             ["volume"] = Direct.Volume(), ["muted"] = Direct.Muted(), ["brightness"] = Direct.Brightness(),
             ["awake"] = Shell.PowerActions.Awake, ["awakeUntil"] = Shell.PowerActions.AwakeUntil is { } until && until != DateTime.MaxValue ? until.ToString("HH:mm") : null,
+            ["media"] = Media.Now is { } media ? new JsonObject { ["title"] = media.Title, ["artist"] = media.Artist, ["app"] = media.App, ["playing"] = media.IsPlaying } : null,
             ["idleSeconds"] = IdleSeconds(), ["signedIn"] = true, ["mac"] = WiredMac(), ["canHibernate"] = PowerApi.CanHibernate(),
             ["allowed"] = new JsonArray(Actions.Where(action => Allowed(action.key)).Select(action => (JsonNode)action.key).ToArray()),
         };
@@ -50,7 +51,7 @@ public static class RemoteControl
     {
         if (!Actions.Any(known => known.key == action)) return (false, "Unknown action");
         if (!Allowed(action)) { Log(who, action, "refused (turned off in Allowed actions)"); return (false, "That action is turned off in WinSwitch › Settings › Allowed actions"); }
-        var (ok, message) = await App.Dispatcher.InvokeAsync(() => Do(action, body)).Task;
+        var (ok, message) = action == "media" ? await MediaAsync(body?["command"]?.ToString().ToLowerInvariant().Replace(" ", "").Replace("/", "") ?? "playpause") : await App.Dispatcher.InvokeAsync(() => Do(action, body)).Task;
         Log(who, action + (body is { Count: > 0 } ? " " + body.ToJsonString() : ""), ok ? "done" : "failed: " + message);
         if (ok) Acted?.Invoke();
         return (ok, message);
@@ -75,9 +76,9 @@ public static class RemoteControl
                 App.Engine.SetTweak(tweak, Flag("on") ?? !App.Engine.TweakIsOn(tweak)); return (true, tweak.Name);
             case "volume":
                 var level = Number("level") ?? (Number("change") is { } change ? (Direct.Volume() ?? 0) + change : null);
-                return level == null ? (false, "Give level (0 to 100) or change (e.g. -10)") : (Direct.SetVolume(Math.Clamp(level.Value, 0, 100)), $"{Math.Clamp(level.Value, 0, 100)}%");
-            case "mute": return (Direct.SetMuted(Flag("on") ?? !(Direct.Muted() ?? false)), "");
-            case "brightness": return Number("level") is { } brightness ? (Direct.SetBrightness(brightness), $"{brightness}%") : (false, "Give level (0 to 100)");
+                return level == null ? (false, "Give level (0 to 100) or change (e.g. -10)") : (Shell.Osd.SetVolume(Math.Clamp(level.Value, 0, 100)), $"{Math.Clamp(level.Value, 0, 100)}%");
+            case "mute": return (Shell.Osd.SetMuted(Flag("on") ?? !(Direct.Muted() ?? false)), "");
+            case "brightness": return Number("level") is { } brightness ? (Shell.Osd.SetBrightness(Math.Clamp(brightness, 0, 100)), $"{Math.Clamp(brightness, 0, 100)}%") : (false, "Give level (0 to 100)");
             case "awake":
                 var minutes = Number("minutes");
                 if (Flag("on") == false || minutes == 0 && body?["minutes"] != null) Shell.PowerActions.StopKeepingAwake();
@@ -93,6 +94,7 @@ public static class RemoteControl
         }
         return (false, "Unknown action");
     }
+    static async Task<(bool, string)> MediaAsync(string command) => Media.Commands.Contains(command) ? (await Media.DoAsync(command), command) : (false, "Give command: playpause, play, pause, next or previous");
     static void Later(Action action) => _ = Task.Delay(1500).ContinueWith(task => App.Dispatcher.Invoke(action));
 
     // ---- Token and addresses ----
