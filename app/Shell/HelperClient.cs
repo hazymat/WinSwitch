@@ -86,7 +86,7 @@ public static class HelperClient
 
     public static async Task<bool> WriteSettingAsync(string key, int value) => key switch
     {
-        "wakeInput" => await DoAsync("wake-devices", new { kind = "input", on = value == 1 }) && await ReadSettingAsync(key) == value,
+        "wakeInput" => await DoAsync("wake-devices", new { kind = "input", on = value == 1 }), // devices that refuse are skipped (built-in keyboards often do)
         "wakeOnLan" => await DoAsync("wol", new { on = value == 1 }) && await ReadSettingAsync(key) == value,
         _ => false,
     };
