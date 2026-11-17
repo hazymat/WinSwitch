@@ -69,11 +69,13 @@ dialog button.go{background:#d8452f}
 <div id="main" class="hidden">
   <section data-action="profile"><h2>Profile</h2><div class="profiles" id="profiles"></div></section>
   <section data-action="tweak" id="tweakSection"><h2>Tweaks</h2><div class="card" id="tweaks"></div></section>
-  <section id="soundSection"><h2>Sound and screen</h2><div class="card">
+  <section id="soundSection"><h2>Playing</h2><div class="card">
+    <div class="row media" data-action="media"><div class="what"><div class="title" id="mediaTitle"></div><div class="artist" id="mediaArtist"></div></div><button id="previous">⏮</button><button class="big" id="playPause">⏯</button><button id="next">⏭</button></div>
     <div class="row" data-action="volume"><button class="icon" id="mute" data-action="mute">🔊</button><input type="range" id="volume" min="0" max="100"><span class="value" id="volumeValue"></span></div>
+  </div></section>
+  <section id="screenSection"><h2>Screen</h2><div class="card">
     <div class="row" data-action="brightness" id="brightnessRow"><button class="icon" disabled>☀︎</button><input type="range" id="brightness" min="0" max="100"><span class="value" id="brightnessValue"></span></div>
   </div></section>
-  <section data-action="media"><h2>Playing</h2><div class="card media"><div class="what"><div class="title" id="mediaTitle"></div><div class="artist" id="mediaArtist"></div></div><button id="previous">⏮</button><button class="big" id="playPause">⏯</button><button id="next">⏭</button></div></section>
   <section data-action="awake"><h2>Keep awake</h2><div class="chips" id="awake"></div></section>
   <section id="powerSection"><h2>Power</h2><div class="power" id="power"></div></section>
 </div>
@@ -117,7 +119,8 @@ function render(next) {
   if (!dragging) { setRange('volume', state.volume); setRange('brightness', state.brightness); }
   $('brightnessRow').classList.toggle('hidden', !allowed.has('brightness') || state.brightness === null);
   $('mute').classList.toggle('on', !!state.muted); $('mute').textContent = state.muted ? '🔇' : '🔊'; $('mute').classList.toggle('hidden', !allowed.has('mute'));
-  $('soundSection').classList.toggle('hidden', !allowed.has('volume') && !allowed.has('brightness'));
+  $('soundSection').classList.toggle('hidden', !allowed.has('volume') && !allowed.has('media'));
+  $('screenSection').classList.toggle('hidden', !allowed.has('brightness') || state.brightness === null);
   // Playing (whatever Windows is playing)
   const media = state.media;
   $('mediaTitle').textContent = media && media.title ? media.title : 'Nothing playing';
