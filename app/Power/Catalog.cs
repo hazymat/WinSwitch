@@ -22,7 +22,9 @@ public static class Catalog
     static readonly Guid displayGroup = new("7516b95f-f776-4464-8c53-06167f40cc99"), sleepGroup = new("238c9fa8-0aad-41ed-83f4-97be242c8f20"), buttonsGroup = new("4f971e89-eebd-4455-a8de-9e59040e7347"), batteryGroup = new("e73a048d-bf27-4f12-9731-8b2076e8891f"), saverGroup = new("de830923-a562-41af-a086-e3a2c6bad2da"), cpuGroup = new("54533251-82be-4824-96c1-47b60b740d00"), wirelessGroup = new("19cbb8fa-5279-450e-9fac-8a3d5fedd0c1"), usbGroup = new("2a737441-1930-4402-8d77-b2bebba308a3"), pcieGroup = new("501a4d13-42af-4429-9fd1-a8218c268e20"), diskGroup = new("0012ee47-9041-4b5d-9b77-535fba8b1442");
 
     public static readonly List<Option> Time = new[] { 0, 60, 120, 180, 300, 600, 900, 1200, 1800, 2700, 3600, 7200, 10800, 18000 }.Select(seconds => new Option(seconds, TimeLabel(seconds))).ToList();
-    public static string TimeLabel(int seconds) => seconds == 0 ? "Never" : seconds < 60 ? $"{seconds} seconds" : seconds < 3600 ? $"{seconds / 60} minute{(seconds / 60 == 1 ? "" : "s")}" : seconds % 3600 == 0 ? $"{seconds / 3600} hour{(seconds / 3600 == 1 ? "" : "s")}" : $"{seconds / 60} minutes";
+    // Some PC makers' plans store "never" as a huge number (0x7FFFFFFF seconds = 596523 hours) instead of 0
+    public static int? AsTime(int? seconds) => seconds is < 0 or > 2_678_400 ? 0 : seconds;
+    public static string TimeLabel(int seconds) => AsTime(seconds) == 0 ? "Never" : seconds < 60 ? $"{seconds} seconds" : seconds < 3600 ? $"{seconds / 60} minute{(seconds / 60 == 1 ? "" : "s")}" : seconds % 3600 == 0 ? $"{seconds / 3600} hour{(seconds / 3600 == 1 ? "" : "s")}" : $"{seconds / 60} minutes";
     static List<Option> Percent(int step, int from = 0) => Enumerable.Range(0, (100 - from) / step + 1).Select(index => new Option(from + index * step, $"{from + index * step}%")).ToList();
     static List<Option> Choices(params string[] labels) => labels.Select((label, index) => new Option(index, label)).ToList();
     static readonly List<Option> offOn = Choices("Off", "On");
