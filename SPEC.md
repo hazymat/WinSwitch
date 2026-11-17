@@ -133,12 +133,26 @@ Power settings are written to WinSwitch's own power plan, made on first run as a
 
 ## Apps to stop (next version)
 
-Each profile can list **Apps to stop**: background apps that drain the battery (Syncthing, cloud sync, updaters, RGB tools). A sixth card on the profile page, "Apps to stop", with Add (pick from running apps) and each app's row showing how it was started.
+Each profile can list **Apps to stop**: background apps that drain the battery (Syncthing, cloud sync, updaters, RGB tools). A card on the profile page, "Apps to stop".
 
-- **Switching to the profile:** WinSwitch asks each app to close the way Windows does at sign-out (a close message to its windows, Ctrl+C for console apps like Syncthing), waits up to 10 seconds, then ends it. Apps running as a Windows service are stopped as a service (helper).
-- **Switching away:** WinSwitch starts again exactly what it stopped (same program, same arguments, same folder, as you), unless the new profile stops it too. Something you closed yourself, or that wasn't running, is never started.
-- **Safety:** never system processes, never WinSwitch, never an app with a visible window that has unsaved work unless you tick "Even if it has windows open". A notification says what it stopped: "Stopped Syncthing to save battery. [Start it now]".
-- Remembered across restarts, so a crash or reboot on battery still restarts the apps when you plug in.
+**Choosing apps: one combined list** (Add opens it, with a search box), grouped:
+- **Running now:** with icons, apps with windows first, then background ones, each showing its program path and how it was started.
+- **Starts with Windows:** the Run keys, the Startup folder, logon scheduled tasks and automatic services, so you can add something that isn't running at the moment.
+- **Browse…** for any program.
+
+Apps are matched by program path, not name, so two different "sync.exe" never get confused.
+
+**How WinSwitch knows how to start it again.** Before stopping anything it records, for each process: the full command line (same switches), working folder, the account it runs as, whether it's elevated, and how it was started, found by matching its path against:
+1. **Services:** stopped and started again as the service (helper).
+2. **Scheduled tasks:** the task is run again, so its own account, elevation and arguments apply (Syncthing is often started this way).
+3. **Startup folder / Run keys / anything else:** started again with the recorded command line, as you.
+Elevated apps need the helper to start again; without it, WinSwitch says so instead of starting them unelevated.
+
+**Switching shows a glass panel** (optional, on by default when a profile stops apps): "Switching to Out and about" with a progress line, staying until the switch is done. Apps with a window open stack inside it as small prompts: "Lightroom is open. Close it?" [Close] [Keep], with **Close all** at the bottom. Background apps are stopped without asking. Each app is first asked to close the way Windows does at sign-out (Ctrl+C for console apps like Syncthing), then ended after 10 seconds.
+
+**Switching away** starts again exactly what WinSwitch stopped, unless the new profile stops it too; anything you closed yourself or kept is left alone. Remembered across restarts.
+
+**System processes are allowed**, except the handful that would crash Windows on the spot (csrss, wininit, winlogon, lsass, smss, services), which the list doesn't offer. A card says what happened: "Stopped Syncthing and 2 others to save battery. [Start them now]".
 
 ## Tweaks (day and night, and other small changes)
 
