@@ -177,7 +177,7 @@ public partial class SettingsWindow : Window
         AddQuestionsCallout(profileEditor);
         var dialsPanel = new StackPanel { IsEnabled = !locked, Opacity = locked ? 0.55 : 1 };
         profileEditor.Children.Add(dialsPanel);
-        AddDials(dialsPanel, profile);
+        AddVisualDials(dialsPanel, profile);
         if (!profile.IsStarting) AddAppsToStop(profileEditor, profile);
     }
 
