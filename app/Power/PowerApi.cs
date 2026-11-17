@@ -28,7 +28,8 @@ public static class PowerApi
     public static string SchemeName(Guid scheme)
     {
         uint size = 0;
-        if (PowerReadFriendlyName(IntPtr.Zero, ref scheme, IntPtr.Zero, IntPtr.Zero, null, ref size) != 0 || size == 0) return "";
+        var sizeResult = PowerReadFriendlyName(IntPtr.Zero, ref scheme, IntPtr.Zero, IntPtr.Zero, null, ref size);
+        if (sizeResult != 0 && sizeResult != 234 /* ERROR_MORE_DATA */ || size == 0) return "";
         var buffer = new byte[size];
         if (PowerReadFriendlyName(IntPtr.Zero, ref scheme, IntPtr.Zero, IntPtr.Zero, buffer, ref size) != 0) return "";
         return System.Text.Encoding.Unicode.GetString(buffer).TrimEnd('\0');
