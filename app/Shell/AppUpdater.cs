@@ -109,6 +109,8 @@ public sealed class AppUpdater
     async Task CheckOnceAsync()
     {
         {
+            // Before the first stable release there's nothing on the stable channel, so follow dev builds
+            if (App.Settings.General.UpdateChannel == "stable" && await NewestTagAsync("stable") == "") { App.Settings.General.UpdateChannel = "dev"; App.Settings.Save(); checkTimer.Interval = TimeSpan.FromSeconds(20); }
             if (AppPaths.IsPortable) { await CheckPortableAsync(); return; }
             var updateManager = CreateManager(App.Settings.General.UpdateChannel);
             if (!updateManager.IsInstalled) { SetStatus("Updates work once WinSwitch is installed with Setup.exe (this copy is running from a zip)."); return; }
