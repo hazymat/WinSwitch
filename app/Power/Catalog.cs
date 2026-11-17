@@ -1,7 +1,7 @@
 namespace WinSwitch.Power;
 
 // How a setting is reached: a power plan value (powrprof), or one of the few things outside the plan
-public enum SettingKind { Plan, Brightness, PowerMode, Refresh, WiFi, Bluetooth, Volume }
+public enum SettingKind { Plan, Brightness, PowerMode, Refresh, WiFi, Bluetooth, MobileBroadband, Volume }
 
 public record Option(int Value, string Label);
 
@@ -16,6 +16,8 @@ public static class Catalog
 {
     public const string Screen = "Screen", Sleep = "Sleep and lid", Speed = "Battery or speed", Wireless = "Wireless and devices", Sound = "Sound";
     public static readonly string[] Dials = { Screen, Sleep, Speed, Wireless, Sound };
+    // Things you change by hand all day: a profile that doesn't set them leaves them alone. Everything else a profile doesn't set comes from Starting profile, so switching always lands in the same place (Mat 17 Nov)
+    public static readonly HashSet<string> YoursToChange = new() { "brightness", "volume", "wifi", "bluetooth", "mobile" };
 
     static readonly Guid displayGroup = new("7516b95f-f776-4464-8c53-06167f40cc99"), sleepGroup = new("238c9fa8-0aad-41ed-83f4-97be242c8f20"), buttonsGroup = new("4f971e89-eebd-4455-a8de-9e59040e7347"), batteryGroup = new("e73a048d-bf27-4f12-9731-8b2076e8891f"), saverGroup = new("de830923-a562-41af-a086-e3a2c6bad2da"), cpuGroup = new("54533251-82be-4824-96c1-47b60b740d00"), wirelessGroup = new("19cbb8fa-5279-450e-9fac-8a3d5fedd0c1"), usbGroup = new("2a737441-1930-4402-8d77-b2bebba308a3"), pcieGroup = new("501a4d13-42af-4429-9fd1-a8218c268e20"), diskGroup = new("0012ee47-9041-4b5d-9b77-535fba8b1442");
 
@@ -65,6 +67,9 @@ public static class Catalog
         // Wireless and devices
         new("wifi", Wireless, "Wi-Fi", SettingKind.WiFi, false, true, offOn),
         new("bluetooth", Wireless, "Bluetooth", SettingKind.Bluetooth, false, true, offOn),
+        new("mobile", Wireless, "Mobile data (SIM)", SettingKind.MobileBroadband, false, true, offOn), // hidden on laptops without one
+        new("graphics", Wireless, "Graphics power (laptops with two graphics chips)", SettingKind.Plan, true, false, Choices("Force power saving", "Save power", "Performance", "Full performance"), new("e276e160-7cb0-43c6-b20b-73f5dce39954"), new("a1662ab2-9d34-4e53-ba8b-2639b9e20857")),
+        new("videoPlayback", Wireless, "When playing video", SettingKind.Plan, true, false, Choices("Best picture", "Balanced", "Save power"), new("9596fb26-9850-41fd-ac3e-f7c3c00afd4b"), new("34c7b99f-9a6d-4b3c-8dc7-b6693b78cef4")),
         // Sound
         new("volume", Sound, "Volume", SettingKind.Volume, false, true, Percent(5)),
     };

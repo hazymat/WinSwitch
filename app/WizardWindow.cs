@@ -20,7 +20,8 @@ public sealed class WizardWindow : Window
     string machine = PowerApi.PowerStatus().hasBattery ? "laptop" : "desktop";
     string where = "both";
     bool dockIsHome = true;
-    int dayMinutes = 30, nightMinutes = 2, batteryPriority = 0, lidAway = 0;
+    int dayMinutes = 30, nightMinutes = 2, batteryPriority = 0, lidAway = 0, lidAwayPlugged = 1, saving = 1, batteryScreenMinutes = 5, batterySleepMinutes = 15;
+    readonly int? batteryHealth = PowerApi.PowerStatus().hasBattery ? Direct.BatteryHealth() : null;
     string night = "22:00-07:00";
     int? nightVolume = -20;
     bool replace = true;
@@ -35,6 +36,9 @@ public sealed class WizardWindow : Window
         Content = root;
         KeyDown += (sender, args) => { if (args.Key == Key.Escape) Close(); };
         if (machine == "laptop" && dockNow.Count > 0) where = "both";
+        // A worn battery starts at a harder setting: excellent → gently … depleted → as hard as possible
+        saving = batteryHealth is { } health ? Math.Min(3, Direct.HealthWord(health).level) : 1;
+        (batteryScreenMinutes, batterySleepMinutes, batteryPriority) = SavingPreset(saving);
         Render();
     }
 
@@ -79,12 +83,22 @@ public sealed class WizardWindow : Window
                 Choice(new (int?, string, string)[] { (null, "Leave it", ""), (-20, "A bit lower", "Down 20%"), (-40, "Much lower", "Down 40%") }, nightVolume, value => nightVolume = value, columns: 3);
                 break;
             case "battery":
-                Heading("On battery, what matters more?");
-                Choice(new[] { (0, "Longest battery", "Slower, cooler, quieter"), (2, "Balanced", "Windows' usual"), (4, "Fastest", "Full speed, shorter battery") }, batteryPriority, value => batteryPriority = value, columns: 3);
+                // Battery health first, then how hard to save power (pre-picked from the health), then what that means, each one changeable (Mat 17 Nov)
+                Heading("Your battery");
+                page.Children.Add(HealthCard());
+                page.Children.Add(Note("How hard should WinSwitch save power on battery?", new Thickness(0, 16, 0, 6)));
+                Choice(new[] { (0, "Gently", "Barely noticeable"), (1, "Balanced", "A good trade"), (2, "Hard", "Noticeably slower"), (3, "As hard as possible", "Battery first") }, saving, value => { saving = value; (batteryScreenMinutes, batterySleepMinutes, batteryPriority) = SavingPreset(value); }, columns: 4);
+                page.Children.Add(Note("On battery, that means (change anything):", new Thickness(0, 14, 0, 6)));
+                page.Children.Add(PresetRow("Screen off after", new[] { 1, 2, 3, 5, 10, 15, 30 }.Select(minutes => (minutes, $"{minutes} min")).ToArray(), batteryScreenMinutes, value => batteryScreenMinutes = value));
+                page.Children.Add(PresetRow("Sleep after", new[] { 5, 10, 15, 30, 60 }.Select(minutes => (minutes, minutes == 60 ? "1 hour" : $"{minutes} min")).ToArray(), batterySleepMinutes, value => batterySleepMinutes = value));
+                page.Children.Add(PresetRow("Speed", new[] { (0, "Longest battery"), (1, "Long battery"), (2, "Balanced"), (3, "Fast") }, batteryPriority, value => batteryPriority = value));
                 break;
             case "lid":
-                Heading("When you close the lid away from the desk");
-                Choice(new[] { (0, "Sleep, then hibernate after an hour", "Recommended: no flat battery in the bag"), (1, "Sleep", ""), (2, "Hibernate", ""), (3, "Shut down", "") }, lidAway, value => lidAway = value);
+                Heading("When you close the lid away from your desk", "At your desk the lid can stay closed with the screens on; this is everywhere else.");
+                page.Children.Add(Note("On battery:", new Thickness(0, 0, 0, 6)));
+                Choice(new[] { (0, "Sleep, then hibernate after an hour", "Recommended: no flat battery in the bag"), (1, "Sleep", ""), (2, "Hibernate", ""), (3, "Shut down", "") }, lidAway, value => lidAway = value, columns: 2);
+                page.Children.Add(Note("Plugged in (charging somewhere else):", new Thickness(0, 18, 0, 6)));
+                Choice(new[] { (1, "Sleep", "Recommended"), (0, "Keep running", "e.g. downloads carry on"), (2, "Hibernate", ""), (3, "Shut down", "") }, lidAwayPlugged, value => lidAwayPlugged = value, columns: 4);
                 break;
             case "summary":
                 Heading("Here's what I'll make", "You can change any of it later in Settings.");
@@ -115,7 +129,9 @@ public sealed class WizardWindow : Window
         else
         {
             if (where != "away") { dock = dockIsHome && dockNow.Count > 0 ? dockNow : null; made.Add((Templates.Desk(dayMinutes), dock != null ? "on the home dock" : "when you pick it, or once you've learnt your dock")); }
-            made.Add((Templates.OutAndAbout(batteryPriority, lidAway), where == "away" ? "always" : "everywhere else"));
+            var outAndAbout = Templates.OutAndAbout(batteryPriority, lidAway, lidAwayPlugged);
+            outAndAbout.Values["screenOff"].Dc = batteryScreenMinutes * 60; outAndAbout.Values["sleepAfter"].Dc = batterySleepMinutes * 60;
+            made.Add((outAndAbout, where == "away" ? "always" : "everywhere else"));
             made.Add((Templates.Presenting(), "when you pick it"));
         }
         Tweak? tweak = null;
@@ -145,6 +161,37 @@ public sealed class WizardWindow : Window
         page.Children.Add(new TextBlock { Text = title, FontSize = 22, FontWeight = FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, subtitle == "" ? 18 : 6) });
         if (subtitle != "") page.Children.Add(new TextBlock { Text = subtitle, FontSize = 14, Foreground = quiet, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 18) });
     }
+    static (int screen, int sleep, int speed) SavingPreset(int saving) => saving switch { 0 => (10, 30, 2), 1 => (5, 15, 1), 2 => (2, 10, 0), _ => (1, 5, 0) };
+
+    // Battery health as one figure with a five-light traffic light
+    UIElement HealthCard()
+    {
+        var colours = new[] { "#2EA05A", "#7DBB3A", "#E0B12F", "#E0812F", "#D8452F" };
+        if (batteryHealth is not { } health) return Note("WinSwitch couldn't read this battery's health, so it starts in the middle.", new Thickness(0, 0, 0, 0));
+        var (level, word) = Direct.HealthWord(health);
+        var lights = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 16, 0) };
+        for (var index = 0; index < 5; index++) lights.Children.Add(new Border { Width = 18, Height = 18, CornerRadius = new CornerRadius(9), Margin = new Thickness(0, 0, 5, 0), Background = (Brush)new BrushConverter().ConvertFromString(colours[index])!, Opacity = index == level ? 1 : 0.18 });
+        var words = new StackPanel { Children = { new TextBlock { Text = $"Battery health: {word}", FontSize = 17, FontWeight = FontWeights.SemiBold }, new TextBlock { Text = $"It holds {health}% of what it did when new." + (level >= 3 ? " WinSwitch will save power harder to make up for it." : ""), Foreground = quiet, FontSize = 12.5, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 2, 0, 0) } } };
+        return new Border { Background = Brushes.White, BorderBrush = new SolidColorBrush(Color.FromRgb(0xE3, 0xE5, 0xE8)), BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(8), Padding = new Thickness(16, 12, 16, 12), Child = new DockPanel { Children = { lights, words } } };
+    }
+
+    // A label and a row of small choices, for the battery page's details
+    UIElement PresetRow(string label, (int value, string text)[] options, int selected, Action<int> pick)
+    {
+        var row = new DockPanel { Margin = new Thickness(0, 0, 0, 6) };
+        row.Children.Add(new TextBlock { Text = label, Width = 120, FontSize = 13, VerticalAlignment = VerticalAlignment.Center });
+        var chips = new WrapPanel();
+        foreach (var (value, text) in options)
+        {
+            var on = value == selected;
+            var chip = new Border { CornerRadius = new CornerRadius(14), Padding = new Thickness(11, 4, 11, 5), Margin = new Thickness(0, 2, 6, 2), Cursor = Cursors.Hand, Background = on ? accent : Brushes.White, BorderBrush = on ? accent : new SolidColorBrush(Color.FromRgb(0xD6, 0xDA, 0xE0)), BorderThickness = new Thickness(1), Child = new TextBlock { Text = text, FontSize = 12, Foreground = on ? Brushes.White : Brushes.Black, FontWeight = on ? FontWeights.SemiBold : FontWeights.Normal } };
+            chip.MouseLeftButtonUp += (sender, args) => { pick(value); Render(); };
+            chips.Children.Add(chip);
+        }
+        row.Children.Add(chips);
+        return row;
+    }
+
     static TextBlock Note(string text, Thickness? margin = null) => new() { Text = text, FontSize = 13, Foreground = quiet, TextWrapping = TextWrapping.Wrap, Margin = margin ?? new Thickness(0, 14, 0, 0) };
 
     // Big picture-style buttons, one picked
@@ -175,7 +222,7 @@ public sealed class WizardWindow : Window
         var parts = new List<string>();
         if (profile.Get("screenOff") is { } screen) parts.Add(screen.Ac == 0 ? "screen stays on" : $"screen off after {Time(screen.Ac ?? 0)}" + (screen.Dc != null && screen.Dc != screen.Ac ? $" ({Time(screen.Dc.Value)} on battery)" : ""));
         if (profile.Get("sleepAfter") is { } sleep) parts.Add(sleep.Ac == 0 && sleep.Dc is null or 0 ? "never sleeps" : $"sleeps after {Time(sleep.Ac ?? 0)}" + (sleep.Dc != null && sleep.Dc != sleep.Ac ? $" ({Time(sleep.Dc.Value)} on battery)" : ""));
-        if (profile.Get("lid") is { Dc: { } lid }) parts.Add("lid on battery: " + Catalog.Find("lid")!.Describe(lid).ToLowerInvariant() + (profile.Get("hibernateAfter")?.Dc is > 0 ? ", then hibernate" : ""));
+        if (profile.Get("lid") is { Dc: { } lid } lidPair) { string Lid(int value) => Catalog.Find("lid")!.Describe(value).ToLowerInvariant().Replace("do nothing", "keep running"); parts.Add($"closing the lid: {Lid(lid)}{(profile.Get("hibernateAfter")?.Dc is > 0 ? ", then hibernate" : "")} on battery" + (lidPair.Ac is { } lidAc ? $", {Lid(lidAc)} plugged in" : "")); }
         if (profile.SpeedAc is { } speed) parts.Add(Catalog.SpeedLabels[speed].ToLowerInvariant() + (profile.SpeedDc is { } speedDc && speedDc != speed ? $" ({Catalog.SpeedLabels[speedDc].ToLowerInvariant()} on battery)" : ""));
         if (profile is Tweak { VolumeChange: { } change }) parts.Add($"volume {(change > 0 ? "up" : "down")} {Math.Abs(change)}%");
         var sentence = string.Join(", ", parts) + ".";

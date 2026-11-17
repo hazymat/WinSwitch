@@ -52,7 +52,11 @@ public sealed class TrayIcon : IDisposable
             trayMenu.Items.Add(new ToolStripSeparator());
             foreach (var tweak in settings.Tweaks) { var on = engine.TweakIsOn(tweak); trayMenu.Items.Add(new ToolStripMenuItem(tweak.Name + (tweak.Scheduled ? $"  ({tweak.From} to {tweak.To})" : ""), null, (sender, args) => engine.SetTweak(tweak, !on)) { Checked = on }); }
         }
+        // Remote control, its own group: what's on, and a way into its settings
         trayMenu.Items.Add(new ToolStripSeparator());
+        var remote = App.Settings.Remote;
+        var remoteParts = new List<string>(); if (remote.PhoneOn) remoteParts.Add(App.Phone.Running ? "phone page on" : "phone page has a problem"); if (remote.MqttOn) remoteParts.Add(App.Mqtt.Status.StartsWith("Connected") ? "Home Assistant connected" : "Home Assistant not connected");
+        trayMenu.Items.Add(new ToolStripMenuItem("Remote control: " + (remoteParts.Count == 0 ? "off" : string.Join(", ", remoteParts)), null, (sender, args) => App.OpenSettings("Phone")));
         var awake = new ToolStripMenuItem(PowerActions.Awake ? AwakeLabel() : "Keep awake");
         if (PowerActions.Awake) awake.DropDownItems.Add("Stop keeping awake", null, (sender, args) => PowerActions.StopKeepingAwake());
         foreach (var (label, minutes) in new[] { ("30 minutes", 30), ("1 hour", 60), ("2 hours", 120), ("Until I turn it off", 0) }) awake.DropDownItems.Add(label, null, (sender, args) => PowerActions.KeepAwake(minutes == 0 ? null : TimeSpan.FromMinutes(minutes)));

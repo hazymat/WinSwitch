@@ -22,6 +22,10 @@
   <ItemGroup>
     <PackageReference Include="NAudio.Wasapi" Version="2.2.1" />
     <PackageReference Include="System.Management" Version="8.0.0" />
+    <PackageReference Include="System.ServiceProcess.ServiceController" Version="8.0.1" />
+    <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="8.0.0" />
+    <PackageReference Include="MQTTnet" Version="4.3.7.1207" />
+    <PackageReference Include="QRCoder" Version="1.6.0" />
     <PackageReference Include="Velopack" Version="0.0.1298" />
   </ItemGroup>
   <ItemGroup>
@@ -36,5 +40,7 @@
   </ItemGroup>
   <ItemGroup>
     <Resource Include="Assets\WinSwitch.ico" />
+    <EmbeddedResource Include="Remote\phone.html" LogicalName="WinSwitch.Remote.phone.html" />
+    <EmbeddedResource Include="Remote\phone-icon.png" LogicalName="WinSwitch.Remote.phone-icon.png" />
   </ItemGroup>
 </Project>

@@ -83,7 +83,7 @@ public sealed class Engine
                 if (appeared.Count > 0) { ThingsAppeared?.Invoke(inventory, appeared); AskAboutNewDock(appeared); }
             }
         }
-        if (Settings.Power.Paused) { ActiveProfile = null; ActiveTweaks = new(); Changed?.Invoke(); return; }
+        if (Settings.Power.Paused) { ActiveProfile = null; ActiveTweaks = new(); await App.Apps.ApplyAsync(null, PluggedIn); Changed?.Invoke(); return; }
         var (pluggedIn, batteryPercent, _) = PowerApi.PowerStatus();
         var (situation, reason) = Match(Current, pluggedIn, batteryPercent);
         var situationId = situation?.Id ?? "default";
@@ -95,13 +95,19 @@ public sealed class Engine
         var previousProfile = ActiveProfile; var previousPluggedIn = lastPluggedIn;
         SituationId = situationId; Reason = reason; ActiveProfile = profile; ActiveTweaks = tweaks; lastPluggedIn = pluggedIn;
         if (profile == null) { Changed?.Invoke(); return; }
-        var effective = Effective(profile, tweaks);
+        var effective = Effective(profile, tweaks, Settings.Profiles.FirstOrDefault(candidate => candidate.IsStarting));
         var signature = profile.Id + "|" + string.Join(",", tweaks.Select(tweak => tweak.Id)) + "|" + pluggedIn + "|" + System.Text.Json.JsonSerializer.Serialize(effective);
-        if (force || signature != lastSignature)
+        var signatureChanged = force || signature != lastSignature;
+        if (signatureChanged)
         {
             lastSignature = signature;
             await ApplyAsync(effective, pluggedIn);
             ApplyVolumeChanges(tweaks);
+        }
+        // Apps to stop: acts only when the list for this profile and power source changes; the switching panel then says what happened
+        var panelShowing = await App.Apps.ApplyAsync(profile, pluggedIn);
+        if (signatureChanged && !panelShowing)
+        {
             if (previousProfile != null && previousProfile.Id != profile.Id) App.Notices.Info($"{profile.Name} profile on", reason, () => HoldProfile(previousProfile.Id));
             else if (previousPluggedIn != null && previousPluggedIn != pluggedIn) App.Notices.Info(pluggedIn ? "Plugged in" : $"On battery, {batteryPercent}%", $"{profile.Name} profile, {(pluggedIn ? "plugged in" : "on battery")} settings");
         }
@@ -125,6 +131,20 @@ public sealed class Engine
         return (null, pluggedIn ? "Plugged in" : "On battery");
     }
 
+    // A rule that can never win because an earlier one always matches first: the same battery level or lower, the same network, the same dock or device
+    public static Situation? CoveredBy(List<Situation> situations, Situation later)
+    {
+        foreach (var earlier in situations.TakeWhile(situation => situation != later))
+        {
+            if (earlier.Kind != later.Kind) continue;
+            if (later.Kind == "battery" ? earlier.BatteryBelow >= later.BatteryBelow : earlier.Things.Count > 0 && earlier.Things.Keys.ToHashSet().SetEquals(later.Things.Keys)) return earlier;
+        }
+        return null;
+    }
+
+    // "When the Home dock is connected", for rule lists and profile summaries
+    public static string Words(Situation situation) => situation.Kind switch { "battery" => $"on battery under {situation.BatteryBelow}%", "network" => $"on {situation.Name}", _ => $"{situation.Name} connected" };
+
     public static bool ScheduleSaysOn(Tweak tweak)
     {
         if (!tweak.Scheduled || !TimeSpan.TryParse(tweak.From, out var from) || !TimeSpan.TryParse(tweak.To, out var to)) return false;
@@ -144,9 +164,17 @@ public sealed class Engine
     }
     public void SetTweak(Tweak tweak, bool on) { Settings.Power.TweakOverrides[tweak.Id] = new TweakOverride { On = on, ScheduledWhenSet = ScheduleSaysOn(tweak) }; Settings.Save(); _ = EvaluateAsync(); }
 
-    public static Dictionary<string, SidePair> Effective(Profile profile, IEnumerable<Tweak> tweaks)
+    // Starting profile underneath (except what's yours to change), then the profile, then any tweaks on top
+    public static Dictionary<string, SidePair> Effective(Profile profile, IEnumerable<Tweak> tweaks, Profile? starting = null)
     {
-        var values = profile.Values.ToDictionary(entry => entry.Key, entry => entry.Value.Clone());
+        var values = new Dictionary<string, SidePair>();
+        if (starting != null && starting != profile) foreach (var (key, pair) in starting.Values.Where(entry => !Catalog.YoursToChange.Contains(entry.Key))) values[key] = pair.Clone();
+        foreach (var (key, pair) in profile.Values)
+        {
+            if (!values.TryGetValue(key, out var target)) values[key] = target = new SidePair();
+            if (pair.Ac != null) target.Ac = pair.Ac;
+            if (pair.Dc != null) target.Dc = pair.Dc;
+        }
         foreach (var tweak in tweaks)
             foreach (var (key, pair) in tweak.Values)
             {
@@ -184,12 +212,35 @@ public sealed class Engine
                 ok = (pair.Ac == null || acNow == (uint)pair.Ac) && (pair.Dc == null || dcNow == (uint)pair.Dc) || Writer.WritePlan(plan, setting, pair);
                 Settings.Power.LastWritten[key] = new SidePair { Ac = pair.Ac ?? (int?)Reader.ReadPlan(plan, setting, true), Dc = pair.Dc ?? (int?)Reader.ReadPlan(plan, setting, false) };
             }
+            else if (setting.Kind == SettingKind.Refresh) ok = await ChangeRefreshAsync(pair, pluggedIn);
             else ok = await Writer.WriteDirect(setting, pair, pluggedIn);
             if (!ok) { NotSupported.Add(key); CrashReporter.Write($"Windows didn't take {setting.Label}; hidden on this PC", null, false); }
         }
         // Making the plan active (again) is what makes Windows use the new values
         PowerApi.SetActiveScheme(plan);
         Settings.Save();
+    }
+
+    // A refresh rate change blanks the screen for a moment, so a card says so first (with a way out) and offers Undo after (Mat 17 Nov)
+    async Task<bool> ChangeRefreshAsync(SidePair pair, bool pluggedIn)
+    {
+        if ((pluggedIn ? pair.Ac : pair.Dc) is not { } wanted) return true;
+        var hertz = Direct.ResolveRefresh(wanted); var before = Direct.RefreshRate();
+        if (hertz == 0 || before == null || before == hertz) return true;
+        var cancelled = false;
+        App.Notices.Info($"Changing the screen to {hertz} Hz", "It may go blank for a second.", () => { cancelled = true; LeaveRefresh(pluggedIn); }, $"Keep {before} Hz", always: true);
+        await Task.Delay(3000);
+        if (cancelled) return true;
+        if (!Direct.SetRefreshRate(hertz)) return false;
+        App.Notices.Info($"Screen now {hertz} Hz", $"It was {before} Hz.", () => { Direct.SetRefreshRate(before.Value); LeaveRefresh(pluggedIn); }, "Undo", always: true);
+        return true;
+    }
+    // "Keep" or Undo: this profile leaves the refresh rate alone on this power source from now on
+    void LeaveRefresh(bool pluggedIn)
+    {
+        if (ActiveProfile?.Values.TryGetValue("refresh", out var pair) != true) return;
+        if (pluggedIn) pair!.Ac = null; else pair!.Dc = null;
+        Settings.Save(); App.NotifySettingsChanged();
     }
 
     void ApplyVolumeChanges(List<Tweak> tweaks)

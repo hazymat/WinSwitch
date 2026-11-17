@@ -93,7 +93,7 @@ Settings › Profiles is a list of profile cards on the left and the chosen prof
 - Brightness of the built-in screen (external monitors untouched)
 - Adaptive brightness and content adaptive brightness
 - Turn off screen when locked after (the lock-screen timeout Windows hides)
-- Refresh rate of the built-in screen (e.g. 60 Hz on battery, 120 Hz plugged; a big battery saver)
+- Refresh rate of the built-in screen (e.g. 60 Hz on battery, 120 Hz plugged; a big battery saver). Changing it can blank the screen for a second, so a card says so 3 s before, with "Keep X Hz", and offers Undo after)
 
 **Sleep**
 - Sleep after, hibernate after (plugged / battery)
@@ -131,9 +131,9 @@ Settings › Profiles is a list of profile cards on the left and the chosen prof
 
 Power settings are written to WinSwitch's own power plan, made on first run as a copy of your current plan and made active. Your original plan is never edited, so restoring is just making it active again. Settings outside the plan (brightness, devices, radios, volume, refresh rate) are written directly and covered by the snapshot.
 
-## Apps to stop (next version)
+## Apps to stop
 
-Each profile can list **Apps to stop**: background apps that drain the battery (Syncthing, cloud sync, updaters, RGB tools). A card on the profile page, "Apps to stop".
+Each profile can list **Apps to stop**, each set to **Always** or **On battery**: background apps that drain the battery (Syncthing, cloud sync, updaters, RGB tools). A card on the profile page, "Apps to stop".
 
 **Choosing apps: one combined list** (Add opens it, with a search box), grouped:
 - **Running now:** with icons, apps with windows first, then background ones, each showing its program path and how it was started.
@@ -242,7 +242,9 @@ A Dell XPS 17 on Windows 11 26H2, on a USB-C dock. What it taught the design:
 
 ## First run
 
-**1. Starting profile.** Before anything else, WinSwitch reads everything it can about how this PC is set up now and saves it twice: as Original settings (the untouchable restore record, below) and as an editable profile called **Starting profile**, with every setting filled in (Windows power plan both sides, power mode, brightness, refresh rate, radios, volume and output device, and with the helper, every device's power saving and wake flags, Wi-Fi and Ethernet adapter power and Wake on LAN properties, hibernate, fast startup). So switching to Starting profile always means "how it was", and it is the base the wizard's suggestions start from. Installing the helper later fills in the device rows it couldn't read before.
+**0. Capture screen.** The very first thing shown: "Saving how this PC is set up", with a note that undoing WinSwitch's changes or uninstalling puts everything back. On the left the sections tick as they're read (Windows power plan; Screen, power mode and sound; Device driver power; Displays and devices; Running apps; Startup apps; Task Scheduler; Services), then **Full list**; on the right what's found scrolls past like a console. Click a section to see what it found, or Full list for everything as a tree. Continue opens the wizard. Original settings › Everything that was captured… shows it again later.
+
+**1. Starting profile.** Before anything else, WinSwitch reads everything it can about how this PC is set up now and saves it twice: as Original settings (the untouchable restore record, below) and as a profile called **Starting profile** (locked and greyed out until you press Edit… and accept a warning; editing it never changes Original settings), with every setting filled in (Windows power plan both sides, power mode, brightness, refresh rate, radios, volume and output device, and with the helper, every device's power saving and wake flags, Wi-Fi and Ethernet adapter power and Wake on LAN properties, hibernate, fast startup). So switching to Starting profile always means "how it was", and it is the base the wizard's suggestions start from. Installing the helper later fills in the device rows it couldn't read before.
 
 **2. Setup wizard.** A few questions, one per page, big picture buttons, nothing technical. Each answer is pre-picked from what WinSwitch can see (a battery, a dock plugged in now, external monitors):
 1. What is this? Laptop, Desktop, or Always-on server.

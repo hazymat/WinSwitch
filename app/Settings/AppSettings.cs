@@ -20,7 +20,28 @@ public class Profile
     public Dictionary<string, SidePair> Values { get; set; } = new();
     public int? SpeedAc { get; set; } // Battery or speed dial position (0..4), null = not set
     public int? SpeedDc { get; set; }
+    public List<AppToStop> AppsToStop { get; set; } = new(); // SPEC.md › Apps to stop
     public SidePair? Get(string key) => Values.TryGetValue(key, out var pair) && (pair.Ac != null || pair.Dc != null) ? pair : null;
+}
+
+// A program a profile stops, matched by its path so two different "sync.exe" never get confused
+public class AppToStop
+{
+    public string Path { get; set; } = "";
+    public string Name { get; set; } = "";
+    public bool OnBatteryOnly { get; set; }
+}
+
+// What WinSwitch stopped and how to start it again exactly as it was (SPEC.md › Apps to stop)
+public class StoppedApp
+{
+    public string Path { get; set; } = "";
+    public string Name { get; set; } = "";
+    public string How { get; set; } = "command"; // service | task | shortcut | command
+    public string Target { get; set; } = ""; // service name, task path, shortcut file, or the full command line
+    public string WorkingFolder { get; set; } = "";
+    public bool Elevated { get; set; }
+    public DateTime StoppedAt { get; set; } = DateTime.Now;
 }
 
 // A few settings laid over whichever profile is on, e.g. Night (SPEC.md › Tweaks)
@@ -51,7 +72,25 @@ public class GeneralSettings
     public string Notifications { get; set; } = "all"; // all | questions | off
     public string LastRunVersion { get; set; } = "";
     public bool WizardDone { get; set; }
+    public bool AskBeforeClosing { get; set; } = true; // apps with a window ask on the switching panel first
     public List<string> IgnoredThings { get; set; } = new(); // docks and monitors you said to ignore
+}
+
+// Remote control: the phone page (and Shortcuts) and MQTT for Home Assistant (SPEC.md › Remote control)
+public class RemoteSettings
+{
+    public bool PhoneOn { get; set; }
+    public int PhonePort { get; set; } = 8723;
+    public string Token { get; set; } = ""; // in the QR code; New token unpairs every phone
+    public bool MqttOn { get; set; }
+    public string MqttHost { get; set; } = "";
+    public int MqttPort { get; set; } = 1883;
+    public string MqttUser { get; set; } = "";
+    public string MqttPasswordProtected { get; set; } = ""; // Windows DPAPI, readable only by this Windows account
+    public bool MqttTls { get; set; }
+    public string MqttTopic { get; set; } = "winswitch";
+    public bool HomeAssistantDiscovery { get; set; } = true;
+    public List<string> Blocked { get; set; } = new(); // actions turned off in Allowed actions
 }
 
 public class TweakOverride { public bool On { get; set; } public bool ScheduledWhenSet { get; set; } }
@@ -65,6 +104,7 @@ public class PowerState
     public string HeldProfileId { get; set; } = ""; // picked by hand from the tray; holds until the situation changes
     public string HeldSituation { get; set; } = "";
     public Dictionary<string, TweakOverride> TweakOverrides { get; set; } = new(); // tweak id -> on/off by hand, until its next scheduled change
+    public List<StoppedApp> Stopped { get; set; } = new(); // remembered across restarts, started again on switching away
     public Dictionary<string, SidePair> LastWritten { get; set; } = new(); // plan values WinSwitch wrote, to notice changes made in Windows
 }
 
@@ -76,6 +116,7 @@ public class AppSettings
     public List<Situation> Situations { get; set; } = new();
     public string DefaultProfileId { get; set; } = ""; // Anything else
     public PowerState Power { get; set; } = new();
+    public RemoteSettings Remote { get; set; } = new();
 
     static readonly JsonSerializerOptions jsonOptions = new() { WriteIndented = true };
     public Profile? ProfileById(string id) => Profiles.FirstOrDefault(profile => profile.Id == id);
