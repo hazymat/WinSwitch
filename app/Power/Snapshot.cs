@@ -14,15 +14,27 @@ public class Snapshot
     public Dictionary<string, SidePair> Values { get; set; } = new();
     public List<Direct.DevicePower> Devices { get; set; } = new(); // device power saving and wake flags (read only for now)
     public string SoundOutput { get; set; } = "";
+    public List<SnapshotSection> Sections { get; set; } = new(); // everything read, as shown on the capture screen (settings and, for reference, apps, tasks and services)
 
     static readonly JsonSerializerOptions jsonOptions = new() { WriteIndented = true };
     public static Snapshot? Load() { try { return File.Exists(AppPaths.SnapshotFile) ? JsonSerializer.Deserialize<Snapshot>(File.ReadAllText(AppPaths.SnapshotFile), jsonOptions) : null; } catch { return null; } }
     public void Save() { Directory.CreateDirectory(AppPaths.DataFolder); File.WriteAllText(AppPaths.SnapshotFile, JsonSerializer.Serialize(this, jsonOptions)); }
 
-    public static async Task<Snapshot> TakeAsync()
+    // The capture screen's sections, in the order they're read
+    public static readonly string[] SectionTitles = { "Windows power plan", "Screen, power mode and sound", "Device driver power", "Displays and devices", "Running apps", "Startup apps", "Task Scheduler", "Services" };
+
+    // Reads everything; `report` gets each finding as it's read (section, group, line) for the capture screen
+    public static async Task<Snapshot> TakeAsync(Action<string, string, string>? report = null)
     {
+        var sections = SectionTitles.ToDictionary(title => title, title => new SnapshotSection { Title = title });
+        void Report(string section, string group, string line) { sections[section].Lines.Add(new SnapshotLine { Group = group, Text = line }); report?.Invoke(section, group, line); }
         var plan = PowerApi.ActiveScheme() ?? Guid.Empty;
-        var snapshot = new Snapshot { Plan = plan.ToString(), PlanName = PowerApi.SchemeName(plan), Values = await Reader.ReadAllAsync(plan), Devices = Direct.DevicePowerFlags(), SoundOutput = Direct.OutputName() };
+        var snapshot = new Snapshot { Plan = plan.ToString(), PlanName = PowerApi.SchemeName(plan) };
+        Report(SectionTitles[0], "", $"Active power plan: {snapshot.PlanName} {{{plan}}}");
+        foreach (var other in PowerApi.Schemes().Where(scheme => scheme != plan)) Report(SectionTitles[0], "", $"Also on this PC: {PowerApi.SchemeName(other)} {{{other}}}");
+        snapshot.Values = await Reader.ReadAllAsync(plan);
+        snapshot.Devices = Direct.DevicePowerFlags();
+        snapshot.SoundOutput = Direct.OutputName();
         // Power mode has a plugged-in and an on-battery choice, kept by Windows in the registry (read only)
         try
         {
@@ -33,9 +45,38 @@ public class Snapshot
             if (acMode != null || dcMode != null) snapshot.Values["powerMode"] = new SidePair { Ac = acMode ?? existing?.Ac, Dc = dcMode ?? existing?.Dc };
         }
         catch { }
+        // Settings, both sides where Windows keeps two
+        foreach (var setting in Catalog.All.Where(setting => snapshot.Values.ContainsKey(setting.Key)).OrderBy(setting => setting.Kind == SettingKind.Plan ? 0 : 1))
+        {
+            var pair = snapshot.Values[setting.Key];
+            string Value(int? value) => value == null ? "?" : setting.Kind == SettingKind.Refresh ? $"{value} Hz" : setting.Describe(value.Value);
+            var text = setting.TwoSided ? $"{setting.Label}: {Value(pair.Ac)} plugged in, {Value(pair.Dc)} on battery" : $"{setting.Label}: {Value(pair.Ac)}";
+            Report(setting.Kind == SettingKind.Plan ? SectionTitles[0] : SectionTitles[1], setting.Dial, text);
+        }
+        if (snapshot.SoundOutput != "") Report(SectionTitles[1], Catalog.Sound, "Sound output: " + snapshot.SoundOutput);
+        foreach (var device in snapshot.Devices) Report(SectionTitles[2], device.Name, $"May be turned off to save power: {YesNo(device.MayTurnOff)}; may wake the PC: {YesNo(device.MayWake)}");
+        try { foreach (var monitor in Shell.MonitorSetup.Current()) Report(SectionTitles[3], "Displays", $"{monitor.Name}{(monitor.Internal ? " (built in)" : "")}"); } catch { }
+        try { foreach (var (thing, name) in Rules.Inventory.Take().Things.Where(thing => !thing.Key.StartsWith("monitor:")).OrderBy(thing => thing.Value)) Report(SectionTitles[3], thing.StartsWith("net:") ? "Network adapters" : "Plugged-in devices", name); } catch { }
+        // For reference, and so anything WinSwitch stops can be started again the same way
+        var windowed = Apps.AppCatalog.WindowedProcessIds();
+        foreach (var (path, processes) in Apps.AppCatalog.RunningByPath().OrderBy(entry => Path.GetFileName(entry.Key))) Report(SectionTitles[4], processes.Any(process => windowed.Contains(process.ProcessId)) ? "With a window" : "In the background", $"{Path.GetFileName(path)} ({processes.Count}): {path}");
+        var starts = Apps.AppCatalog.StartsWithWindows();
+        foreach (var entry in starts.Where(entry => entry.How is "run" or "shortcut")) Report(SectionTitles[5], entry.How == "run" ? "Run key" : "Startup folder", $"{entry.Name}: {entry.CommandLine}");
+        foreach (var entry in starts.Where(entry => entry.How == "task")) Report(SectionTitles[6], "Starts at sign-in or boot", $"{entry.Target}: {entry.CommandLine}");
+        try
+        {
+            using var searcher = new System.Management.ManagementObjectSearcher("SELECT Name, DisplayName, StartMode, State FROM Win32_Service");
+            foreach (System.Management.ManagementObject service in searcher.Get()) using (service) Report(SectionTitles[7], $"{service["StartMode"]} start", $"{service["DisplayName"]} ({service["Name"]}): {service["State"]}");
+        }
+        catch { }
+        snapshot.Sections = sections.Values.ToList();
         return snapshot;
     }
+    static string YesNo(bool? value) => value == null ? "?" : value.Value ? "yes" : "no";
 }
+
+public class SnapshotSection { public string Title { get; set; } = ""; public List<SnapshotLine> Lines { get; set; } = new(); }
+public class SnapshotLine { public string Group { get; set; } = ""; public string Text { get; set; } = ""; }
 
 // Reads the current value of every setting this PC has
 public static class Reader

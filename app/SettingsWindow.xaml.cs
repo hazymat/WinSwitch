@@ -16,6 +16,7 @@ public partial class SettingsWindow : Window
     App App => App.Instance;
     AppSettings Settings => App.Settings;
     string selectedProfileId = "", selectedTweakId = "";
+    bool startingUnlocked; // until this window closes
     static readonly Brush quietBrush = new SolidColorBrush(Color.FromRgb(0x66, 0x6B, 0x75)), accentBrush = new SolidColorBrush(Color.FromRgb(0x2F, 0x7F, 0xD8)), lineBrush = new SolidColorBrush(Color.FromRgb(0xE3, 0xE5, 0xE8));
 
     public SettingsWindow()
@@ -52,7 +53,7 @@ public partial class SettingsWindow : Window
     // ---- Small builders ----
     static TextBlock Text(string text, double size = 13, bool bold = false, Brush? colour = null, Thickness? margin = null) => new() { Text = text, FontSize = size, FontWeight = bold ? FontWeights.SemiBold : FontWeights.Normal, Foreground = colour ?? Brushes.Black, TextWrapping = TextWrapping.Wrap, Margin = margin ?? new Thickness(0) };
     Border Card(UIElement content) => new() { Style = (Style)FindResource("Card"), Child = content };
-    Border Callout(string text, bool warning = false) => new() { Style = (Style)FindResource(warning ? "Warning" : "Callout"), Child = new DockPanel { Children = { new TextBlock { Style = (Style)FindResource(warning ? "WarningIcon" : "CalloutIcon") }, new TextBlock { Style = (Style)FindResource("CalloutText"), Text = text } } } };
+    Border Callout(string text, bool warning = false) => new() { Margin = new Thickness(0, 10, 0, 12), Style = (Style)FindResource(warning ? "Warning" : "Callout"), Child = new DockPanel { Children = { new TextBlock { Style = (Style)FindResource(warning ? "WarningIcon" : "CalloutIcon") }, new TextBlock { Style = (Style)FindResource("CalloutText"), Text = text } } } };
     static Button Button(string label, Action action, bool primary = false) { var button = new Button { Content = label, FontWeight = primary ? FontWeights.SemiBold : FontWeights.Normal }; button.Click += (sender, args) => action(); return button; }
     static TextBlock Link(string label, Action action) { var link = new TextBlock { Text = label, Foreground = accentBrush, Cursor = Cursors.Hand, Margin = new Thickness(0, 6, 0, 0) }; link.MouseLeftButtonUp += (sender, args) => action(); return link; }
     static Brush BrushOf(string colour) { try { return (Brush)new BrushConverter().ConvertFromString(colour)!; } catch { return Brushes.SteelBlue; } }
@@ -114,9 +115,60 @@ public partial class SettingsWindow : Window
         profileEditor.Children.Add(headRow);
         var useButton = Button(App.Engine.ActiveProfile?.Id == profile.Id ? "On now" : "Use now", () => { App.Engine.HoldProfile(profile.Id); }); useButton.IsEnabled = App.Engine.ActiveProfile?.Id != profile.Id;
         profileEditor.Children.Add(new WrapPanel { Margin = new Thickness(0, 0, 0, 10), Children = { useButton } });
-        if (profile.IsStarting) profileEditor.Children.Add(Callout("How this PC was set up before WinSwitch, read on first run. Change it if you like; Original settings keeps the untouched copy for restoring."));
+        // Starting profile is locked (greyed) until Edit and a warning, so it can be trusted to mean "how it was" (Mat 17 Nov)
+        var locked = profile.IsStarting && !startingUnlocked;
+        if (locked)
+        {
+            var editButton = Button("Edit…", () =>
+            {
+                if (MessageBox.Show(this, "Starting profile is how your PC was set up when WinSwitch was installed. If you change it, switching to it won't put things back exactly as they were.\n\nUninstalling WinSwitch still puts back the original settings. WinSwitch keeps its own copy of those, under Original settings.\n\nEdit Starting profile?", "Edit Starting profile", MessageBoxButton.OKCancel, MessageBoxImage.Warning) != MessageBoxResult.OK) return;
+                startingUnlocked = true; FillProfileEditor();
+            });
+            profileEditor.Children.Add(new Border { Style = (Style)FindResource("Callout"), Margin = new Thickness(0, 0, 0, 12), Child = new DockPanel { Children = { new TextBlock { Style = (Style)FindResource("CalloutIcon"), Text = "\uE72E" }, editButton, new TextBlock { Style = (Style)FindResource("CalloutText"), Text = "This is how your PC was set up when WinSwitch was installed. Switching to it puts those settings back." } } } });
+            DockPanel.SetDock(editButton, Dock.Right); editButton.Margin = new Thickness(10, 0, 0, 0); editButton.VerticalAlignment = VerticalAlignment.Center;
+        }
+        else if (profile.IsStarting) profileEditor.Children.Add(Callout("Change it if you like. Even if you do, WinSwitch keeps its own copy of the settings it captured when it was installed, and puts those back if you uninstall it. You can see them under Original settings.", warning: true));
         AddQuestionsCallout(profileEditor);
-        AddDials(profileEditor, profile);
+        var dialsPanel = new StackPanel { IsEnabled = !locked, Opacity = locked ? 0.55 : 1 };
+        profileEditor.Children.Add(dialsPanel);
+        AddDials(dialsPanel, profile);
+        if (!profile.IsStarting) AddAppsToStop(profileEditor, profile);
+    }
+
+    // Apps to stop: each with Always / On battery, and Add apps… opening the combined chooser (SPEC.md › Apps to stop)
+    void AddAppsToStop(Panel page, Profile profile)
+    {
+        var body = new StackPanel();
+        var title = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 6) };
+        title.Children.Add(new Border { Width = 26, Height = 26, CornerRadius = new CornerRadius(6), Background = new SolidColorBrush(Color.FromRgb(0xEE, 0xF4, 0xFC)), Margin = new Thickness(0, 0, 9, 0), Child = new TextBlock { Text = "\uE71A", FontFamily = new FontFamily("Segoe MDL2 Assets"), Foreground = accentBrush, FontSize = 12, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center } });
+        title.Children.Add(Text("Apps to stop", 14.5, true, null, new Thickness(0, 3, 0, 0)));
+        body.Children.Add(title);
+        if (profile.AppsToStop.Count == 0) body.Children.Add(Text("Background apps that drain the battery, such as sync tools, updaters or RGB lighting. They start again when you switch to a profile that doesn't stop them.", 12.5, false, quietBrush, new Thickness(0, 0, 0, 8)));
+        foreach (var app in profile.AppsToStop.ToList())
+        {
+            var when = new ComboBox { Width = 130, Margin = new Thickness(10, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center, Items = { new ComboBoxItem { Content = "Always", Tag = false }, new ComboBoxItem { Content = "On battery", Tag = true } } };
+            when.SelectedIndex = app.OnBatteryOnly ? 1 : 0;
+            when.SelectionChanged += (sender, args) => { app.OnBatteryOnly = when.SelectedIndex == 1; Changed(); };
+            var remove = new TextBlock { Text = "✕", Foreground = quietBrush, FontSize = 13, Cursor = Cursors.Hand, Margin = new Thickness(12, 0, 2, 0), VerticalAlignment = VerticalAlignment.Center, ToolTip = "Don't stop this app" };
+            remove.MouseLeftButtonUp += (sender, args) => { profile.AppsToStop.Remove(app); Changed(); FillProfileEditor(); };
+            var icon = new Image { Width = 22, Height = 22, Source = Apps.AppIcon.For(app.Path), Margin = new Thickness(0, 0, 10, 0), VerticalAlignment = VerticalAlignment.Center };
+            var row = new DockPanel { Margin = new Thickness(0, 4, 0, 4) };
+            DockPanel.SetDock(icon, Dock.Left); DockPanel.SetDock(remove, Dock.Right); DockPanel.SetDock(when, Dock.Right);
+            row.Children.Add(icon); row.Children.Add(remove); row.Children.Add(when);
+            var stoppedNow = Settings.Power.Stopped.Any(stopped => stopped.Path.Equals(app.Path, StringComparison.OrdinalIgnoreCase));
+            row.Children.Add(new StackPanel { VerticalAlignment = VerticalAlignment.Center, Children = { Text(app.Name + (stoppedNow ? "  ·  stopped now" : ""), 13, false), new TextBlock { Text = app.Path, FontSize = 11.5, Foreground = quietBrush, TextTrimming = TextTrimming.CharacterEllipsis, ToolTip = app.Path } } });
+            body.Children.Add(row);
+        }
+        var addButton = Button("Add apps…", () =>
+        {
+            var picker = new Apps.AppPicker(profile.AppsToStop.Select(app => app.Path)) { Owner = this };
+            if (picker.ShowDialog() != true) return;
+            profile.AppsToStop.AddRange(picker.Chosen);
+            Changed(); FillProfileEditor();
+        });
+        addButton.Margin = new Thickness(0, 8, 0, 0); addButton.HorizontalAlignment = HorizontalAlignment.Left;
+        body.Children.Add(addButton);
+        page.Children.Add(Card(body));
     }
 
     // Changes made in Windows that are still waiting for an answer (SPEC.md › Playing nicely with Windows)
@@ -370,6 +422,7 @@ public partial class SettingsWindow : Window
         var buttons = new WrapPanel { Margin = new Thickness(0, 10, 0, 12) };
         if (Settings.Power.Paused) buttons.Children.Add(Button("Resume WinSwitch", () => { App.Engine.Resume(); _ = FillOriginalAsync(); }, true));
         else buttons.Children.Add(Button("Restore everything", async () => { if (MessageBox.Show(this, "Put every setting back as it was before WinSwitch? WinSwitch pauses until you resume it.", "WinSwitch", MessageBoxButton.OKCancel) == MessageBoxResult.OK) { await App.RestoreEverythingAsync(); await FillOriginalAsync(); } }, true));
+        buttons.Children.Add(Button("Everything that was captured…", () => new CaptureWindow(snapshot) { Owner = this }.Show()));
         originalPage.Children.Add(buttons);
         var plan = Guid.TryParse(Settings.Power.OwnPlan, out var own) ? own : PowerApi.ActiveScheme() ?? Guid.Empty;
         var now = await Reader.ReadAllAsync(Settings.Power.Paused ? PowerApi.ActiveScheme() ?? plan : plan);
@@ -416,6 +469,11 @@ public partial class SettingsWindow : Window
         startWithWindowsBox.Click += (sender, args) => { Settings.General.StartWithWindows = startWithWindowsBox.IsChecked == true; Settings.Save(); try { StartupRegistration.Apply(Settings.General.StartWithWindows); } catch { } };
         notificationsCombo.SelectedItem = notificationsCombo.Items.Cast<ComboBoxItem>().FirstOrDefault(item => (string)item.Tag == Settings.General.Notifications) ?? notificationsCombo.Items[0];
         notificationsCombo.SelectionChanged += (sender, args) => { if (notificationsCombo.SelectedItem is ComboBoxItem { Tag: string mode }) { Settings.General.Notifications = mode; Settings.Save(); } };
+        askBeforeClosingBox.IsChecked = Settings.General.AskBeforeClosing;
+        askBeforeClosingBox.Click += (sender, args) => { Settings.General.AskBeforeClosing = askBeforeClosingBox.IsChecked == true; Settings.Save(); };
+        void ShowStopped() { var names = Settings.Power.Stopped.Select(app => app.Name).ToList(); stoppedText.Text = names.Count == 0 ? "Nothing is stopped now." : "Stopped now: " + string.Join(", ", names); startStoppedButton.IsEnabled = names.Count > 0; }
+        startStoppedButton.Click += async (sender, args) => { await App.Apps.StartTheseAgainAsync(Settings.Power.Stopped.ToList()); ShowStopped(); };
+        ShowStopped(); App.Engine.Changed += () => Dispatcher.BeginInvoke(ShowStopped);
         wizardButton.Click += (sender, args) => App.OpenWizard();
         quitButton.Click += (sender, args) => App.Quit();
     }

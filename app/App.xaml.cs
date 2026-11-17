@@ -13,6 +13,7 @@ public partial class App : Application
     public AppUpdater Updater { get; } = new();
     public Notices Notices { get; private set; } = null!;
     public Engine Engine { get; } = new();
+    public Apps.AppStopper Apps { get; } = new();
     public Snapshot? Snapshot { get; private set; }
     public bool IsQuitting { get; private set; }
     public event Action? SettingsChanged;
@@ -39,9 +40,12 @@ public partial class App : Application
         if (Settings.General.LastRunVersion != Updater.CurrentVersion) { Settings.General.LastRunVersion = Updater.CurrentVersion; Settings.Save(); }
         // First run: read everything before changing anything (SPEC.md › First run)
         Snapshot = Snapshot.Load();
+        CaptureWindow? captureWindow = null;
         if (Snapshot == null)
         {
-            Snapshot = await Snapshot.TakeAsync();
+            // The capture screen shows everything being read; the wizard follows when it's closed (Mat 17 Nov)
+            captureWindow = new CaptureWindow(); captureWindow.Show();
+            Snapshot = await captureWindow.CaptureAsync();
             Snapshot.Save();
             var starting = Templates.Starting(Snapshot);
             Settings.Profiles.Insert(0, starting);
@@ -51,7 +55,7 @@ public partial class App : Application
         trayIcon = new TrayIcon();
         Engine.Start();
         if (CrashReporter.TakeUnseenReport()) Notices.Info("WinSwitch had a problem last time", "Details are in Settings › About › Open logs (crash.log).", always: true);
-        if (!Settings.General.WizardDone) OpenWizard();
+        if (!Settings.General.WizardDone) { if (captureWindow?.IsVisible == true) captureWindow.Closed += (sender, args) => OpenWizard(); else OpenWizard(); }
     }
 
     public void NotifySettingsChanged() { SettingsChanged?.Invoke(); Engine.EvaluateSoon(); }
@@ -86,6 +90,7 @@ public partial class App : Application
         Engine.Pause();
         var snapshot = Snapshot;
         await Task.Run(() => Restorer.RestoreEverything(snapshot, deletePlan: false)); // off the UI thread: the radio calls wait on Windows
+        await Apps.StartEverythingAgainAsync();
         Notices.Info("Back as it was before WinSwitch", "WinSwitch is paused until you resume it.", Engine.Resume, "Resume", always: true);
         SettingsChanged?.Invoke();
     }

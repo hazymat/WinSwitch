@@ -86,6 +86,14 @@
           </Border>
           <Border Style="{StaticResource Card}">
             <StackPanel>
+              <TextBlock Text="Apps to stop" Style="{StaticResource CardTitle}" />
+              <CheckBox x:Name="askBeforeClosingBox" Content="Ask before closing apps that have a window open" />
+              <TextBlock Style="{StaticResource Quiet}" Text="Background apps are always stopped without asking. An app still open after 10 seconds (it may be asking to save) is never ended without asking." />
+              <WrapPanel Margin="0,8,0,0"><Button x:Name="startStoppedButton" Content="Start stopped apps again now" /><TextBlock x:Name="stoppedText" Style="{StaticResource Quiet}" VerticalAlignment="Center" Margin="4,0,0,4" /></WrapPanel>
+            </StackPanel>
+          </Border>
+          <Border Style="{StaticResource Card}">
+            <StackPanel>
               <TextBlock Text="Set up" Style="{StaticResource CardTitle}" />
               <WrapPanel Margin="0,6,0,0"><Button x:Name="wizardButton" Content="Set up with the wizard…" /><Button x:Name="quitButton" Content="Quit WinSwitch" /></WrapPanel>
             </StackPanel>

@@ -20,7 +20,7 @@ public sealed class WizardWindow : Window
     string machine = PowerApi.PowerStatus().hasBattery ? "laptop" : "desktop";
     string where = "both";
     bool dockIsHome = true;
-    int dayMinutes = 30, nightMinutes = 2, batteryPriority = 0, lidAway = 0;
+    int dayMinutes = 30, nightMinutes = 2, batteryPriority = 0, lidAway = 0, lidAwayPlugged = 1;
     string night = "22:00-07:00";
     int? nightVolume = -20;
     bool replace = true;
@@ -83,8 +83,11 @@ public sealed class WizardWindow : Window
                 Choice(new[] { (0, "Longest battery", "Slower, cooler, quieter"), (2, "Balanced", "Windows' usual"), (4, "Fastest", "Full speed, shorter battery") }, batteryPriority, value => batteryPriority = value, columns: 3);
                 break;
             case "lid":
-                Heading("When you close the lid away from the desk");
-                Choice(new[] { (0, "Sleep, then hibernate after an hour", "Recommended: no flat battery in the bag"), (1, "Sleep", ""), (2, "Hibernate", ""), (3, "Shut down", "") }, lidAway, value => lidAway = value);
+                Heading("When you close the lid away from your desk", "At your desk the lid can stay closed with the screens on; this is everywhere else.");
+                page.Children.Add(Note("On battery:", new Thickness(0, 0, 0, 6)));
+                Choice(new[] { (0, "Sleep, then hibernate after an hour", "Recommended: no flat battery in the bag"), (1, "Sleep", ""), (2, "Hibernate", ""), (3, "Shut down", "") }, lidAway, value => lidAway = value, columns: 2);
+                page.Children.Add(Note("Plugged in (charging somewhere else):", new Thickness(0, 18, 0, 6)));
+                Choice(new[] { (1, "Sleep", "Recommended"), (0, "Keep running", "e.g. downloads carry on"), (2, "Hibernate", ""), (3, "Shut down", "") }, lidAwayPlugged, value => lidAwayPlugged = value, columns: 4);
                 break;
             case "summary":
                 Heading("Here's what I'll make", "You can change any of it later in Settings.");
@@ -115,7 +118,7 @@ public sealed class WizardWindow : Window
         else
         {
             if (where != "away") { dock = dockIsHome && dockNow.Count > 0 ? dockNow : null; made.Add((Templates.Desk(dayMinutes), dock != null ? "on the home dock" : "when you pick it, or once you've learnt your dock")); }
-            made.Add((Templates.OutAndAbout(batteryPriority, lidAway), where == "away" ? "always" : "everywhere else"));
+            made.Add((Templates.OutAndAbout(batteryPriority, lidAway, lidAwayPlugged), where == "away" ? "always" : "everywhere else"));
             made.Add((Templates.Presenting(), "when you pick it"));
         }
         Tweak? tweak = null;
@@ -175,7 +178,7 @@ public sealed class WizardWindow : Window
         var parts = new List<string>();
         if (profile.Get("screenOff") is { } screen) parts.Add(screen.Ac == 0 ? "screen stays on" : $"screen off after {Time(screen.Ac ?? 0)}" + (screen.Dc != null && screen.Dc != screen.Ac ? $" ({Time(screen.Dc.Value)} on battery)" : ""));
         if (profile.Get("sleepAfter") is { } sleep) parts.Add(sleep.Ac == 0 && sleep.Dc is null or 0 ? "never sleeps" : $"sleeps after {Time(sleep.Ac ?? 0)}" + (sleep.Dc != null && sleep.Dc != sleep.Ac ? $" ({Time(sleep.Dc.Value)} on battery)" : ""));
-        if (profile.Get("lid") is { Dc: { } lid }) parts.Add("lid on battery: " + Catalog.Find("lid")!.Describe(lid).ToLowerInvariant() + (profile.Get("hibernateAfter")?.Dc is > 0 ? ", then hibernate" : ""));
+        if (profile.Get("lid") is { Dc: { } lid } lidPair) { string Lid(int value) => Catalog.Find("lid")!.Describe(value).ToLowerInvariant().Replace("do nothing", "keep running"); parts.Add($"closing the lid: {Lid(lid)}{(profile.Get("hibernateAfter")?.Dc is > 0 ? ", then hibernate" : "")} on battery" + (lidPair.Ac is { } lidAc ? $", {Lid(lidAc)} plugged in" : "")); }
         if (profile.SpeedAc is { } speed) parts.Add(Catalog.SpeedLabels[speed].ToLowerInvariant() + (profile.SpeedDc is { } speedDc && speedDc != speed ? $" ({Catalog.SpeedLabels[speedDc].ToLowerInvariant()} on battery)" : ""));
         if (profile is Tweak { VolumeChange: { } change }) parts.Add($"volume {(change > 0 ? "up" : "down")} {Math.Abs(change)}%");
         var sentence = string.Join(", ", parts) + ".";

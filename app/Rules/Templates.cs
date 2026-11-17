@@ -42,10 +42,10 @@ public static class Templates
         ApplySpeed(profile, true, 4); ApplySpeed(profile, false, 2);
         return profile;
     }
-    public static Profile OutAndAbout(int batteryPriority, int lidAway)
+    public static Profile OutAndAbout(int batteryPriority, int lidAway, int lidAwayPlugged = 1)
     {
         var profile = new Profile { Name = "Out and about", Colour = Colours[1] };
-        Set(profile, "screenOff", 600, 300); Set(profile, "sleepAfter", 1800, 600); Set(profile, "lid", 1, lidAway == 3 ? 3 : lidAway == 2 ? 2 : 1);
+        Set(profile, "screenOff", 600, 300); Set(profile, "sleepAfter", 1800, 600); Set(profile, "lid", lidAwayPlugged, lidAway == 3 ? 3 : lidAway == 2 ? 2 : 1); // lid values: 0 do nothing, 1 sleep, 2 hibernate, 3 shut down
         if (lidAway == 0) Set(profile, "hibernateAfter", 0, 3600); // sleep, then hibernate after an hour asleep
         Set(profile, "standbyNetwork", null, 0); // no network while asleep in the bag
         ApplySpeed(profile, true, 2); ApplySpeed(profile, false, batteryPriority);

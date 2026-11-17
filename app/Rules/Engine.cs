@@ -83,7 +83,7 @@ public sealed class Engine
                 if (appeared.Count > 0) { ThingsAppeared?.Invoke(inventory, appeared); AskAboutNewDock(appeared); }
             }
         }
-        if (Settings.Power.Paused) { ActiveProfile = null; ActiveTweaks = new(); Changed?.Invoke(); return; }
+        if (Settings.Power.Paused) { ActiveProfile = null; ActiveTweaks = new(); await App.Apps.ApplyAsync(null, PluggedIn); Changed?.Invoke(); return; }
         var (pluggedIn, batteryPercent, _) = PowerApi.PowerStatus();
         var (situation, reason) = Match(Current, pluggedIn, batteryPercent);
         var situationId = situation?.Id ?? "default";
@@ -97,11 +97,17 @@ public sealed class Engine
         if (profile == null) { Changed?.Invoke(); return; }
         var effective = Effective(profile, tweaks);
         var signature = profile.Id + "|" + string.Join(",", tweaks.Select(tweak => tweak.Id)) + "|" + pluggedIn + "|" + System.Text.Json.JsonSerializer.Serialize(effective);
-        if (force || signature != lastSignature)
+        var signatureChanged = force || signature != lastSignature;
+        if (signatureChanged)
         {
             lastSignature = signature;
             await ApplyAsync(effective, pluggedIn);
             ApplyVolumeChanges(tweaks);
+        }
+        // Apps to stop: acts only when the list for this profile and power source changes; the switching panel then says what happened
+        var panelShowing = await App.Apps.ApplyAsync(profile, pluggedIn);
+        if (signatureChanged && !panelShowing)
+        {
             if (previousProfile != null && previousProfile.Id != profile.Id) App.Notices.Info($"{profile.Name} profile on", reason, () => HoldProfile(previousProfile.Id));
             else if (previousPluggedIn != null && previousPluggedIn != pluggedIn) App.Notices.Info(pluggedIn ? "Plugged in" : $"On battery, {batteryPercent}%", $"{profile.Name} profile, {(pluggedIn ? "plugged in" : "on battery")} settings");
         }
@@ -184,12 +190,35 @@ public sealed class Engine
                 ok = (pair.Ac == null || acNow == (uint)pair.Ac) && (pair.Dc == null || dcNow == (uint)pair.Dc) || Writer.WritePlan(plan, setting, pair);
                 Settings.Power.LastWritten[key] = new SidePair { Ac = pair.Ac ?? (int?)Reader.ReadPlan(plan, setting, true), Dc = pair.Dc ?? (int?)Reader.ReadPlan(plan, setting, false) };
             }
+            else if (setting.Kind == SettingKind.Refresh) ok = await ChangeRefreshAsync(pair, pluggedIn);
             else ok = await Writer.WriteDirect(setting, pair, pluggedIn);
             if (!ok) { NotSupported.Add(key); CrashReporter.Write($"Windows didn't take {setting.Label}; hidden on this PC", null, false); }
         }
         // Making the plan active (again) is what makes Windows use the new values
         PowerApi.SetActiveScheme(plan);
         Settings.Save();
+    }
+
+    // A refresh rate change blanks the screen for a moment, so a card says so first (with a way out) and offers Undo after (Mat 17 Nov)
+    async Task<bool> ChangeRefreshAsync(SidePair pair, bool pluggedIn)
+    {
+        if ((pluggedIn ? pair.Ac : pair.Dc) is not { } wanted) return true;
+        var hertz = Direct.ResolveRefresh(wanted); var before = Direct.RefreshRate();
+        if (hertz == 0 || before == null || before == hertz) return true;
+        var cancelled = false;
+        App.Notices.Info($"Changing the screen to {hertz} Hz", "It may go blank for a second.", () => { cancelled = true; LeaveRefresh(pluggedIn); }, $"Keep {before} Hz", always: true);
+        await Task.Delay(3000);
+        if (cancelled) return true;
+        if (!Direct.SetRefreshRate(hertz)) return false;
+        App.Notices.Info($"Screen now {hertz} Hz", $"It was {before} Hz.", () => { Direct.SetRefreshRate(before.Value); LeaveRefresh(pluggedIn); }, "Undo", always: true);
+        return true;
+    }
+    // "Keep" or Undo: this profile leaves the refresh rate alone on this power source from now on
+    void LeaveRefresh(bool pluggedIn)
+    {
+        if (ActiveProfile?.Values.TryGetValue("refresh", out var pair) != true) return;
+        if (pluggedIn) pair!.Ac = null; else pair!.Dc = null;
+        Settings.Save(); App.NotifySettingsChanged();
     }
 
     void ApplyVolumeChanges(List<Tweak> tweaks)
