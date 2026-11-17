@@ -33,8 +33,8 @@ static class Commands
             case "version": return Version;
             case "state": return State();
             case "device": SetDevice(Text("id"), request.ContainsKey("allowOff") ? On("allowOff") : (bool?)null, request.ContainsKey("allowWake") ? On("allowWake") : (bool?)null); return true;
-            case "wake-devices": foreach (var device in Devices().Where(device => device.Kind == Text("kind") && device.AllowWake != null)) SetFlag("MSPower_DeviceWakeEnable", device.Id, On()); return true;
-            case "power-off-devices": foreach (var device in Devices().Where(device => device.Kind == Text("kind") && device.AllowOff != null)) SetFlag("MSPower_DeviceEnable", device.Id, On()); return true;
+            case "wake-devices": return SetAll("MSPower_DeviceWakeEnable", Devices().Where(device => device.Kind == Text("kind") && device.AllowWake != null), On());
+            case "power-off-devices": return SetAll("MSPower_DeviceEnable", Devices().Where(device => device.Kind == Text("kind") && device.AllowOff != null), On());
             case "wol": SetWakeOnLan(On()); return true;
             case "hibernate": var hibernate = Program.Run("powercfg.exe", On() ? "/hibernate on" : "/hibernate off"); if (hibernate.exitCode != 0) throw new Exception(hibernate.output.Trim()); return true;
             case "fast-startup": Registry.SetValue(FastStartupKey, "HiberbootEnabled", On() ? 1 : 0, RegistryValueKind.DWord); return true;
@@ -89,6 +89,14 @@ static class Commands
         using var searcher = new ManagementObjectSearcher(new ManagementScope(@"root\WMI"), new ObjectQuery($"SELECT * FROM {wmiClass} WHERE InstanceName = '{id.Replace("\\", "\\\\").Replace("'", "\\'")}'"));
         foreach (ManagementObject flag in searcher.Get()) { flag["Enable"] = on; flag.Put(); }
         Log.Write($"{wmiClass} {id} = {on}");
+    }
+
+    // Some devices (often a laptop's built-in keyboard) refuse the change; the rest still get it. Answers how many did.
+    static int SetAll(string wmiClass, IEnumerable<Device> devices, bool on)
+    {
+        var changed = 0;
+        foreach (var device in devices) { try { SetFlag(wmiClass, device.Id, on); changed++; } catch (Exception error) { Log.Write($"{wmiClass} {device.Name}: {error.Message}"); } }
+        return changed;
     }
 
     static void SetDevice(string id, bool? allowOff, bool? allowWake)

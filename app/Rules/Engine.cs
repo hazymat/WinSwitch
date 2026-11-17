@@ -41,7 +41,7 @@ public sealed class Engine
             return IntPtr.Zero;
         });
         NetworkChange.NetworkAddressChanged += (sender, args) => App.Dispatcher.BeginInvoke(() => { inventoryStale = true; EvaluateSoon(); });
-        Microsoft.Win32.SystemEvents.PowerModeChanged += (sender, args) => App.Dispatcher.BeginInvoke(EvaluateSoon);
+        Microsoft.Win32.SystemEvents.PowerModeChanged += (sender, args) => App.Dispatcher.BeginInvoke(() => EvaluateSoon()); // a lambda: the method group has an optional parameter, so it went through DynamicInvoke with no arguments and threw
         settleTimer.Tick += async (sender, args) => { settleTimer.Stop(); await EvaluateAsync(); };
         minuteTimer.Tick += async (sender, args) => await EvaluateAsync(); // battery level and tweak schedules
         watchTimer.Tick += (sender, args) => WatchWindowsChanges();

@@ -138,9 +138,9 @@ function render(next) {
 
 function setRange(id, value) { const range = $(id); if (value === null || value === undefined) return; range.value = value; range.style.setProperty('--fill', value + '%'); $(id + 'Value').textContent = value + '%'; }
 ['volume', 'brightness'].forEach(id => {
-  const range = $(id); let timer = null;
-  range.oninput = () => { dragging = true; setRange(id, +range.value); clearTimeout(timer); timer = setTimeout(() => call(id, { level: +range.value }), 150); };
-  range.onchange = () => { dragging = false; call(id, { level: +range.value }); };
+  const range = $(id); let timer = null, sent = null;
+  range.oninput = () => { dragging = true; setRange(id, +range.value); clearTimeout(timer); timer = setTimeout(() => { sent = +range.value; call(id, { level: sent }); }, 150); };
+  range.onchange = () => { dragging = false; clearTimeout(timer); if (+range.value !== sent) call(id, { level: +range.value }); };
 });
 $('playPause').onclick = () => call('media', { command: 'playpause' });
 $('next').onclick = () => call('media', { command: 'next' });
