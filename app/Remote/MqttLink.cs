@@ -82,7 +82,7 @@ public sealed class MqttLink
 
     void SetStatus(string status) { Status = status; App.Dispatcher.BeginInvoke(() => StatusChanged?.Invoke()); }
 
-    // Commands: <base>/profile/set "Desk", <base>/tweak/<id>/set ON, <base>/power/set shutdown, <base>/volume/set 30, mute, brightness, awake
+    // Commands: <base>/profile/set "Desk", <base>/tweak/<id>/set ON, <base>/power/set shutdown, <base>/volume/set 30, mute, brightness, awake, <base>/media/set next
     async Task OnMessageAsync(MqttApplicationMessageReceivedEventArgs received)
     {
         var topic = received.ApplicationMessage.Topic; var payload = received.ApplicationMessage.ConvertPayloadToString()?.Trim() ?? "";
@@ -98,6 +98,7 @@ public sealed class MqttLink
             "volume" => ("volume", new JsonObject { ["level"] = payload }),
             "brightness" => ("brightness", new JsonObject { ["level"] = payload }),
             "mute" => ("mute", new JsonObject { ["on"] = on }),
+            "media" => ("media", new JsonObject { ["command"] = payload }),
             "awake" => ("awake", int.TryParse(payload, out var minutes) ? new JsonObject { ["minutes"] = minutes } : new JsonObject { ["on"] = on }),
             _ => ("", new JsonObject()),
         };
@@ -154,6 +155,13 @@ public sealed class MqttLink
             if (allowed.Contains("volume")) { var volume = Entity("volume", "Volume", "mdi:volume-high"); volume["command_topic"] = $"{BaseTopic}/volume/set"; volume["value_template"] = "{{ value_json.volume }}"; volume["min"] = 0; volume["max"] = 100; volume["unit_of_measurement"] = "%"; Add("number", "volume", volume); }
             if (allowed.Contains("brightness") && Direct.Brightness() != null) { var brightness = Entity("brightness", "Screen brightness", "mdi:brightness-6"); brightness["command_topic"] = $"{BaseTopic}/brightness/set"; brightness["value_template"] = "{{ value_json.brightness }}"; brightness["min"] = 0; brightness["max"] = 100; brightness["unit_of_measurement"] = "%"; Add("number", "brightness", brightness); }
             if (allowed.Contains("mute")) { var mute = Entity("mute", "Mute", "mdi:volume-off"); mute["command_topic"] = $"{BaseTopic}/mute/set"; mute["value_template"] = "{{ 'ON' if value_json.muted else 'OFF' }}"; Add("switch", "mute", mute); }
+            if (allowed.Contains("media"))
+            {
+                foreach (var (command, label, icon) in new[] { ("playpause", "Play or pause", "mdi:play-pause"), ("next", "Next track", "mdi:skip-next"), ("previous", "Previous track", "mdi:skip-previous") })
+                { var button = Entity($"media_{command}", label, icon); button.Remove("state_topic"); button["command_topic"] = $"{BaseTopic}/media/set"; button["payload_press"] = command; Add("button", $"media_{command}", button); }
+                var nowPlaying = Entity("now_playing", "Now playing", "mdi:music"); nowPlaying["value_template"] = "{{ ((value_json.media.artist ~ ' - ' if value_json.media.artist else '') ~ value_json.media.title) if value_json.media and value_json.media.title else 'Nothing' }}"; Add("sensor", "now_playing", nowPlaying);
+                var isPlaying = Entity("playing", "Playing", "mdi:music-note"); isPlaying["value_template"] = "{{ 'ON' if value_json.media and value_json.media.playing else 'OFF' }}"; Add("binary_sensor", "playing", isPlaying);
+            }
             if (allowed.Contains("awake")) { var awake = Entity("awake", "Keep awake", "mdi:coffee"); awake["command_topic"] = $"{BaseTopic}/awake/set"; awake["value_template"] = "{{ 'ON' if value_json.awake else 'OFF' }}"; Add("switch", "awake", awake); }
             var (_, _, hasBattery) = PowerApi.PowerStatus();
             if (hasBattery)

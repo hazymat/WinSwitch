@@ -48,6 +48,12 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:26px;heigh
 .power button.danger{color:#ffb3a8}
 .toast{position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom) + 20px);transform:translate(-50%,40px);opacity:0;background:rgba(32,36,44,.96);border:1px solid var(--line);padding:10px 16px;border-radius:12px;transition:.25s;font-size:14px;max-width:90%}
 .toast.show{transform:translate(-50%,0);opacity:1}
+.media{display:flex;align-items:center;gap:12px}
+.media .what{flex:1;min-width:0}
+.media .title{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.media .artist{color:var(--soft);font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.media button{width:46px;height:46px;border-radius:23px;border:1px solid var(--line);background:var(--card);color:var(--text);font-size:18px;flex:none}
+.media button.big{width:56px;height:56px;border-radius:28px;background:var(--accent);border-color:var(--accent);font-size:22px}
 .hidden{display:none!important}
 .offline{color:var(--warn);margin:40px 8px;text-align:center}
 dialog{background:#20242c;color:var(--text);border:1px solid var(--line);border-radius:16px;padding:20px;max-width:320px}
@@ -67,6 +73,7 @@ dialog button.go{background:#d8452f}
     <div class="row" data-action="volume"><button class="icon" id="mute" data-action="mute">🔊</button><input type="range" id="volume" min="0" max="100"><span class="value" id="volumeValue"></span></div>
     <div class="row" data-action="brightness" id="brightnessRow"><button class="icon" disabled>☀︎</button><input type="range" id="brightness" min="0" max="100"><span class="value" id="brightnessValue"></span></div>
   </div></section>
+  <section data-action="media"><h2>Playing</h2><div class="card media"><div class="what"><div class="title" id="mediaTitle"></div><div class="artist" id="mediaArtist"></div></div><button id="previous">⏮</button><button class="big" id="playPause">⏯</button><button id="next">⏭</button></div></section>
   <section data-action="awake"><h2>Keep awake</h2><div class="chips" id="awake"></div></section>
   <section id="powerSection"><h2>Power</h2><div class="power" id="power"></div></section>
 </div>
@@ -111,6 +118,11 @@ function render(next) {
   $('brightnessRow').classList.toggle('hidden', !allowed.has('brightness') || state.brightness === null);
   $('mute').classList.toggle('on', !!state.muted); $('mute').textContent = state.muted ? '🔇' : '🔊'; $('mute').classList.toggle('hidden', !allowed.has('mute'));
   $('soundSection').classList.toggle('hidden', !allowed.has('volume') && !allowed.has('brightness'));
+  // Playing (whatever Windows is playing)
+  const media = state.media;
+  $('mediaTitle').textContent = media && media.title ? media.title : 'Nothing playing';
+  $('mediaArtist').textContent = media ? [media.artist, media.app].filter(Boolean).join(' · ') : '';
+  $('playPause').textContent = media && media.playing ? '⏸' : '▶';
   // Keep awake
   const awake = $('awake'); awake.innerHTML = '';
   awakeChoices.forEach(([minutes, label]) => { const chip = document.createElement('button'); chip.className = 'chip' + ((minutes === 0 ? !state.awake : false) ? ' on' : ''); chip.textContent = label; chip.onclick = () => call('awake', minutes === 0 ? { on: false } : minutes < 0 ? { on: true } : { minutes }); awake.appendChild(chip); });
@@ -127,6 +139,9 @@ function setRange(id, value) { const range = $(id); if (value === null || value 
   range.oninput = () => { dragging = true; setRange(id, +range.value); clearTimeout(timer); timer = setTimeout(() => call(id, { level: +range.value }), 150); };
   range.onchange = () => { dragging = false; call(id, { level: +range.value }); };
 });
+$('playPause').onclick = () => call('media', { command: 'playpause' });
+$('next').onclick = () => call('media', { command: 'next' });
+$('previous').onclick = () => call('media', { command: 'previous' });
 $('mute').onclick = () => call('mute', { on: !(state && state.muted) });
 
 function confirmThen(text, action) { $('confirmText').textContent = text; const dialog = $('confirm'); $('confirmYes').onclick = () => { dialog.close(); action(); }; $('confirmNo').onclick = () => dialog.close(); dialog.showModal(); }

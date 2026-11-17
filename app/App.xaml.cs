@@ -55,7 +55,7 @@ public partial class App : Application
             Settings.Save();
         }
         trayIcon = new TrayIcon();
-        Engine.Start(); Suggestions.Start();
+        Engine.Start(); Suggestions.Start(); Media.Start();
         Mqtt = new Remote.MqttLink();
         Phone.Apply(); _ = Mqtt.ApplyAsync(); _ = OfferHelperUpdateAsync();
         if (CrashReporter.TakeUnseenReport()) Notices.Info("WinSwitch had a problem last time", "Details are in Settings › About › Open logs (crash.log).", always: true);
