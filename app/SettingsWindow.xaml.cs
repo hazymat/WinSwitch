@@ -197,6 +197,19 @@ public partial class SettingsWindow : Window
         title.Children.Add(new Border { Width = 26, Height = 26, CornerRadius = new CornerRadius(6), Background = new SolidColorBrush(Color.FromRgb(0xEE, 0xF4, 0xFC)), Margin = new Thickness(0, 0, 9, 0), Child = new TextBlock { Text = "\uE71A", FontFamily = new FontFamily("Segoe MDL2 Assets"), Foreground = accentBrush, FontSize = 12, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center } });
         title.Children.Add(Text("Apps to stop", 14.5, true, null, new Thickness(0, 3, 0, 0)));
         body.Children.Add(title);
+        // Set them all at once
+        if (profile.AppsToStop.Count > 1)
+        {
+            var allRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 4) };
+            allRow.Children.Add(Text("Set all to", 12.5, false, quietBrush, new Thickness(0, 0, 8, 0)));
+            foreach (var (label, onBattery) in new[] { ("Always", false), ("On battery", true) })
+            {
+                var link = new TextBlock { Text = label, Foreground = accentBrush, Cursor = Cursors.Hand, FontSize = 12.5, Margin = new Thickness(0, 0, 12, 0) };
+                link.MouseLeftButtonUp += (sender, args) => { foreach (var app in profile.AppsToStop) app.OnBatteryOnly = onBattery; Changed(); FillProfileEditor(); };
+                allRow.Children.Add(link);
+            }
+            body.Children.Add(allRow);
+        }
         if (profile.AppsToStop.Count == 0) body.Children.Add(Text("Background apps that drain the battery, such as sync tools, updaters or RGB lighting. They start again when you switch to a profile that doesn't stop them.", 12.5, false, quietBrush, new Thickness(0, 0, 0, 8)));
         foreach (var app in profile.AppsToStop.ToList())
         {
