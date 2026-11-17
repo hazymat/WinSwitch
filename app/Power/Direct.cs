@@ -76,7 +76,23 @@ public static class Direct
     static MMDevice? DefaultOutput() { try { return new MMDeviceEnumerator().GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia); } catch { return null; } }
     public static int? Volume() { using var output = DefaultOutput(); return output == null ? null : (int)Math.Round(output.AudioEndpointVolume.MasterVolumeLevelScalar * 100); }
     public static bool SetVolume(int percent) { using var output = DefaultOutput(); if (output == null) return false; output.AudioEndpointVolume.MasterVolumeLevelScalar = Math.Clamp(percent, 0, 100) / 100f; return true; }
+    public static bool? Muted() { using var output = DefaultOutput(); return output?.AudioEndpointVolume.Mute; }
+    public static bool SetMuted(bool muted) { using var output = DefaultOutput(); if (output == null) return false; output.AudioEndpointVolume.Mute = muted; return true; }
     public static string OutputName() { using var output = DefaultOutput(); return output?.FriendlyName ?? ""; }
+
+    // ---- Battery health: how much it holds now against when new (the same figures as Windows' battery report) ----
+    public static int? BatteryHealth()
+    {
+        try
+        {
+            long Sum(string wmiClass, string property) { long total = 0; using var searcher = new ManagementObjectSearcher(new ManagementScope(@"root\WMI"), new SelectQuery($"SELECT {property} FROM {wmiClass}")); foreach (ManagementObject battery in searcher.Get()) using (battery) total += Convert.ToInt64(battery[property]); return total; }
+            var design = Sum("BatteryStaticData", "DesignedCapacity"); var full = Sum("BatteryFullChargedCapacity", "FullChargedCapacity");
+            return design > 0 && full > 0 ? (int)Math.Clamp(Math.Round(full * 100.0 / design), 1, 100) : null;
+        }
+        catch { return null; }
+    }
+    // Five levels, as a traffic light (Mat 17 Nov)
+    public static (int level, string word) HealthWord(int percent) => percent >= 90 ? (0, "Excellent") : percent >= 75 ? (1, "Good") : percent >= 60 ? (2, "Medium") : percent >= 40 ? (3, "Poor") : (4, "Depleted");
 
     // ---- Device power flags (read only until the helper exists; SPEC.md › Architecture) ----
     public record DevicePower(string Name, bool? MayTurnOff, bool? MayWake);

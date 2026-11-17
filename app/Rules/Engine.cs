@@ -95,7 +95,7 @@ public sealed class Engine
         var previousProfile = ActiveProfile; var previousPluggedIn = lastPluggedIn;
         SituationId = situationId; Reason = reason; ActiveProfile = profile; ActiveTweaks = tweaks; lastPluggedIn = pluggedIn;
         if (profile == null) { Changed?.Invoke(); return; }
-        var effective = Effective(profile, tweaks);
+        var effective = Effective(profile, tweaks, Settings.Profiles.FirstOrDefault(candidate => candidate.IsStarting));
         var signature = profile.Id + "|" + string.Join(",", tweaks.Select(tweak => tweak.Id)) + "|" + pluggedIn + "|" + System.Text.Json.JsonSerializer.Serialize(effective);
         var signatureChanged = force || signature != lastSignature;
         if (signatureChanged)
@@ -131,6 +131,20 @@ public sealed class Engine
         return (null, pluggedIn ? "Plugged in" : "On battery");
     }
 
+    // A rule that can never win because an earlier one always matches first: the same battery level or lower, the same network, the same dock or device
+    public static Situation? CoveredBy(List<Situation> situations, Situation later)
+    {
+        foreach (var earlier in situations.TakeWhile(situation => situation != later))
+        {
+            if (earlier.Kind != later.Kind) continue;
+            if (later.Kind == "battery" ? earlier.BatteryBelow >= later.BatteryBelow : earlier.Things.Count > 0 && earlier.Things.Keys.ToHashSet().SetEquals(later.Things.Keys)) return earlier;
+        }
+        return null;
+    }
+
+    // "When the Home dock is connected", for rule lists and profile summaries
+    public static string Words(Situation situation) => situation.Kind switch { "battery" => $"on battery under {situation.BatteryBelow}%", "network" => $"on {situation.Name}", _ => $"{situation.Name} connected" };
+
     public static bool ScheduleSaysOn(Tweak tweak)
     {
         if (!tweak.Scheduled || !TimeSpan.TryParse(tweak.From, out var from) || !TimeSpan.TryParse(tweak.To, out var to)) return false;
@@ -150,9 +164,17 @@ public sealed class Engine
     }
     public void SetTweak(Tweak tweak, bool on) { Settings.Power.TweakOverrides[tweak.Id] = new TweakOverride { On = on, ScheduledWhenSet = ScheduleSaysOn(tweak) }; Settings.Save(); _ = EvaluateAsync(); }
 
-    public static Dictionary<string, SidePair> Effective(Profile profile, IEnumerable<Tweak> tweaks)
+    // Starting profile underneath (except what's yours to change), then the profile, then any tweaks on top
+    public static Dictionary<string, SidePair> Effective(Profile profile, IEnumerable<Tweak> tweaks, Profile? starting = null)
     {
-        var values = profile.Values.ToDictionary(entry => entry.Key, entry => entry.Value.Clone());
+        var values = new Dictionary<string, SidePair>();
+        if (starting != null && starting != profile) foreach (var (key, pair) in starting.Values.Where(entry => !Catalog.YoursToChange.Contains(entry.Key))) values[key] = pair.Clone();
+        foreach (var (key, pair) in profile.Values)
+        {
+            if (!values.TryGetValue(key, out var target)) values[key] = target = new SidePair();
+            if (pair.Ac != null) target.Ac = pair.Ac;
+            if (pair.Dc != null) target.Dc = pair.Dc;
+        }
         foreach (var tweak in tweaks)
             foreach (var (key, pair) in tweak.Values)
             {

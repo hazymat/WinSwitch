@@ -88,7 +88,7 @@ public static class Reader
         foreach (var setting in Catalog.All)
         {
             if (setting.Kind == SettingKind.Plan) { var ac = PowerApi.Read(plan, setting.Subgroup, setting.Setting, true); var dc = PowerApi.Read(plan, setting.Subgroup, setting.Setting, false); if (ac != null || dc != null) values[setting.Key] = new SidePair { Ac = (int?)ac, Dc = (int?)dc }; continue; }
-            int? now = setting.Kind switch { SettingKind.Brightness => Direct.Brightness(), SettingKind.PowerMode => Direct.PowerMode(), SettingKind.Refresh => Direct.RefreshRates().Count > 1 ? Direct.RefreshRate() : null, SettingKind.Volume => Direct.Volume(), SettingKind.WiFi => await Direct.RadioState(RadioKind.WiFi), SettingKind.Bluetooth => await Direct.RadioState(RadioKind.Bluetooth), _ => null };
+            int? now = setting.Kind switch { SettingKind.Brightness => Direct.Brightness(), SettingKind.PowerMode => Direct.PowerMode(), SettingKind.Refresh => Direct.RefreshRates().Count > 1 ? Direct.RefreshRate() : null, SettingKind.Volume => Direct.Volume(), SettingKind.WiFi => await Direct.RadioState(RadioKind.WiFi), SettingKind.Bluetooth => await Direct.RadioState(RadioKind.Bluetooth), SettingKind.MobileBroadband => await Direct.RadioState(RadioKind.MobileBroadband), _ => null };
             if (now == null) continue;
             // Outside the plan only the current side can be read; the other side starts the same
             values[setting.Key] = setting.TwoSided ? new SidePair { Ac = now, Dc = now } : new SidePair { Ac = now };
@@ -122,6 +122,7 @@ public static class Writer
             SettingKind.Volume => Direct.Volume() == value || Direct.SetVolume(value.Value),
             SettingKind.WiFi => await Direct.RadioState(RadioKind.WiFi) == value || await Direct.SetRadio(RadioKind.WiFi, value == 1),
             SettingKind.Bluetooth => await Direct.RadioState(RadioKind.Bluetooth) == value || await Direct.SetRadio(RadioKind.Bluetooth, value == 1),
+            SettingKind.MobileBroadband => await Direct.RadioState(RadioKind.MobileBroadband) == value || await Direct.SetRadio(RadioKind.MobileBroadband, value == 1),
             _ => true,
         };
     }

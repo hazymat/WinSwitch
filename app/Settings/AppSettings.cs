@@ -76,6 +76,23 @@ public class GeneralSettings
     public List<string> IgnoredThings { get; set; } = new(); // docks and monitors you said to ignore
 }
 
+// Remote control: the phone page (and Shortcuts) and MQTT for Home Assistant (SPEC.md › Remote control)
+public class RemoteSettings
+{
+    public bool PhoneOn { get; set; }
+    public int PhonePort { get; set; } = 8723;
+    public string Token { get; set; } = ""; // in the QR code; New token unpairs every phone
+    public bool MqttOn { get; set; }
+    public string MqttHost { get; set; } = "";
+    public int MqttPort { get; set; } = 1883;
+    public string MqttUser { get; set; } = "";
+    public string MqttPasswordProtected { get; set; } = ""; // Windows DPAPI, readable only by this Windows account
+    public bool MqttTls { get; set; }
+    public string MqttTopic { get; set; } = "winswitch";
+    public bool HomeAssistantDiscovery { get; set; } = true;
+    public List<string> Blocked { get; set; } = new(); // actions turned off in Allowed actions
+}
+
 public class TweakOverride { public bool On { get; set; } public bool ScheduledWhenSet { get; set; } }
 
 // WinSwitch's own power plan and what it last wrote (SPEC.md › Profiles, Playing nicely with Windows)
@@ -99,6 +116,7 @@ public class AppSettings
     public List<Situation> Situations { get; set; } = new();
     public string DefaultProfileId { get; set; } = ""; // Anything else
     public PowerState Power { get; set; } = new();
+    public RemoteSettings Remote { get; set; } = new();
 
     static readonly JsonSerializerOptions jsonOptions = new() { WriteIndented = true };
     public Profile? ProfileById(string id) => Profiles.FirstOrDefault(profile => profile.Id == id);

@@ -48,6 +48,7 @@ public static class Templates
         Set(profile, "screenOff", 600, 300); Set(profile, "sleepAfter", 1800, 600); Set(profile, "lid", lidAwayPlugged, lidAway == 3 ? 3 : lidAway == 2 ? 2 : 1); // lid values: 0 do nothing, 1 sleep, 2 hibernate, 3 shut down
         if (lidAway == 0) Set(profile, "hibernateAfter", 0, 3600); // sleep, then hibernate after an hour asleep
         Set(profile, "standbyNetwork", null, 0); // no network while asleep in the bag
+        Set(profile, "graphics", null, 1); Set(profile, "videoPlayback", null, 2); // on battery: the power-saving graphics chip, video tuned for battery
         ApplySpeed(profile, true, 2); ApplySpeed(profile, false, batteryPriority);
         return profile;
     }

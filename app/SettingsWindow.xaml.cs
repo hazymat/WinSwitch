@@ -23,14 +23,19 @@ public partial class SettingsWindow : Window
     {
         InitializeComponent();
         settingsTabs.SelectedItem = profilesTab;
-        WireGeneralTab(); WireAboutTab();
+        WireGeneralTab(); WireAboutTab(); WireRemoteTabs();
         FillProfiles(); FillTweaks(); FillSituations(); _ = FillOriginalAsync();
         KeyDown += (sender, keyArgs) => { if (keyArgs.Key == Key.Escape && !keyArgs.Handled && keyArgs.OriginalSource is not TextBox) { keyArgs.Handled = true; Close(); } };
         App.SettingsChanged += OnOutsideChange; App.Engine.Changed += OnEngineChanged;
         Closed += (sender, args) => { App.SettingsChanged -= OnOutsideChange; App.Engine.Changed -= OnEngineChanged; App.Engine.ThingsAppeared -= OnThingsAppeared; };
         settingsTabs.SelectionChanged += (sender, args) => { if (args.Source == settingsTabs && settingsTabs.SelectedItem == originalTab) _ = FillOriginalAsync(); };
     }
-    void OnOutsideChange() => Dispatcher.BeginInvoke(() => { if (!editing) { FillProfiles(); FillTweaks(); FillSituations(); } });
+    // Never rebuilt under an open drop-down or a box being typed in: it waits until you've finished
+    void OnOutsideChange() => Dispatcher.BeginInvoke(async () =>
+    {
+        for (var waited = 0; waited < 120 && IsLoaded && (Mouse.Captured != null || Keyboard.FocusedElement is TextBox); waited++) await Task.Delay(500);
+        if (!editing && IsLoaded) { FillProfiles(); FillTweaks(); FillSituations(); }
+    });
     // Only when what's on changes (the engine also reports every 30 s), so open drop-downs and text boxes aren't rebuilt under you
     string lastEngineState = "";
     void OnEngineChanged() => Dispatcher.BeginInvoke(() =>
@@ -45,7 +50,7 @@ public partial class SettingsWindow : Window
 
     public void SelectTab(string tabName, string profileId = "")
     {
-        var tabByName = new Dictionary<string, TabItem> { ["Profiles"] = profilesTab, ["Tweaks"] = tweaksTab, ["Situations"] = situationsTab, ["Original"] = originalTab, ["General"] = generalTab, ["About"] = aboutTab };
+        var tabByName = new Dictionary<string, TabItem> { ["Profiles"] = profilesTab, ["Tweaks"] = tweaksTab, ["Situations"] = situationsTab, ["Original"] = originalTab, ["Phone"] = phoneTab, ["HomeAssistant"] = mqttTab, ["Allowed"] = allowedTab, ["RemoteLog"] = remoteLogTab, ["General"] = generalTab, ["About"] = aboutTab };
         if (tabByName.TryGetValue(tabName, out var selectedTab)) settingsTabs.SelectedItem = selectedTab;
         if (profileId != "") { selectedProfileId = profileId; FillProfiles(); }
     }
@@ -54,7 +59,7 @@ public partial class SettingsWindow : Window
     static TextBlock Text(string text, double size = 13, bool bold = false, Brush? colour = null, Thickness? margin = null) => new() { Text = text, FontSize = size, FontWeight = bold ? FontWeights.SemiBold : FontWeights.Normal, Foreground = colour ?? Brushes.Black, TextWrapping = TextWrapping.Wrap, Margin = margin ?? new Thickness(0) };
     Border Card(UIElement content) => new() { Style = (Style)FindResource("Card"), Child = content };
     Border Callout(string text, bool warning = false) => new() { Margin = new Thickness(0, 10, 0, 12), Style = (Style)FindResource(warning ? "Warning" : "Callout"), Child = new DockPanel { Children = { new TextBlock { Style = (Style)FindResource(warning ? "WarningIcon" : "CalloutIcon") }, new TextBlock { Style = (Style)FindResource("CalloutText"), Text = text } } } };
-    static Button Button(string label, Action action, bool primary = false) { var button = new Button { Content = label, FontWeight = primary ? FontWeights.SemiBold : FontWeights.Normal }; button.Click += (sender, args) => action(); return button; }
+    static Button Button(string label, Action action, bool primary = false) { var button = new Button { Content = label }; if (primary) button.Style = (Style)Application.Current.FindResource("Primary"); button.Click += (sender, args) => action(); return button; }
     static TextBlock Link(string label, Action action) { var link = new TextBlock { Text = label, Foreground = accentBrush, Cursor = Cursors.Hand, Margin = new Thickness(0, 6, 0, 0) }; link.MouseLeftButtonUp += (sender, args) => action(); return link; }
     static Brush BrushOf(string colour) { try { return (Brush)new BrushConverter().ConvertFromString(colour)!; } catch { return Brushes.SteelBlue; } }
     static Border Dot(string colour, double size = 10) => new() { Width = size, Height = size, CornerRadius = new CornerRadius(size / 2), Background = BrushOf(colour), Margin = new Thickness(0, 0, 8, 0), VerticalAlignment = VerticalAlignment.Center };
@@ -70,15 +75,59 @@ public partial class SettingsWindow : Window
         {
             var isOn = !Settings.Power.Paused && App.Engine.ActiveProfile?.Id == profile.Id;
             var header = new DockPanel();
-            if (isOn) { var badge = new Border { Background = new SolidColorBrush(Color.FromRgb(0xE3, 0xF4, 0xE8)), CornerRadius = new CornerRadius(9), Padding = new Thickness(7, 0, 7, 1), Child = Text("ON NOW", 10, true, new SolidColorBrush(Color.FromRgb(0x1D, 0x6B, 0x35))) }; DockPanel.SetDock(badge, Dock.Right); header.Children.Add(badge); }
-            header.Children.Add(new StackPanel { Orientation = Orientation.Horizontal, Children = { Dot(profile.Colour), Text(profile.Name, 13.5, true) } });
-            var card = new Border { Style = (Style)FindResource("Card"), Margin = new Thickness(0, 0, 0, 8), Padding = new Thickness(12, 10, 12, 10), Cursor = Cursors.Hand, Child = new StackPanel { Children = { header, Text(Describe(profile), 12, false, quietBrush, new Thickness(0, 4, 0, 0)) } } };
+            // Right side: ON NOW, or a green play button that switches to it now
+            if (isOn) { var badge = new Border { Background = new SolidColorBrush(Color.FromRgb(0xE3, 0xF4, 0xE8)), CornerRadius = new CornerRadius(9), Padding = new Thickness(7, 1, 7, 2), VerticalAlignment = VerticalAlignment.Center, Child = Text("ON NOW", 10, true, new SolidColorBrush(Color.FromRgb(0x1D, 0x6B, 0x35))) }; DockPanel.SetDock(badge, Dock.Right); header.Children.Add(badge); }
+            else { var play = PlayButton(() => App.Engine.HoldProfile(profile.Id)); DockPanel.SetDock(play, Dock.Right); header.Children.Add(play); }
+            header.Children.Add(new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Children = { Dot(profile.Colour), Text(profile.Name, 13.5, true) } });
+            var content = new StackPanel { Children = { header, Text(Describe(profile), 12, false, quietBrush, new Thickness(0, 4, 0, 0)), TurnsOnLine(profile) } };
+            // Duplicate and delete sit on the card, shown on the chosen one
+            var tools = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 6, -4, -4), Visibility = profile.Id == selectedProfileId ? Visibility.Visible : Visibility.Collapsed };
+            tools.Children.Add(IconTool("\uE8C8", "Make a copy", true, () => DuplicateProfile(profile)));
+            if (!profile.IsStarting && Settings.Profiles.Count > 1) tools.Children.Add(IconTool("\uE74D", "Delete this profile", true, () => DeleteProfile(profile)));
+            content.Children.Add(tools);
+            var card = new Border { Style = (Style)FindResource("Card"), Margin = new Thickness(0, 0, 0, 8), Padding = new Thickness(12, 10, 12, 10), Cursor = Cursors.Hand, Child = content };
             if (profile.Id == selectedProfileId) { card.BorderBrush = accentBrush; card.BorderThickness = new Thickness(2); }
-            card.MouseLeftButtonUp += (sender, args) => { selectedProfileId = profile.Id; FillProfiles(); };
+            card.MouseLeftButtonUp += (sender, args) => { if (args.Handled) return; selectedProfileId = profile.Id; FillProfiles(); };
             profileList.Children.Add(card);
         }
         profileList.Children.Add(Link("＋ New profile", () => { var source = Settings.ProfileById(selectedProfileId); var profile = new Profile { Name = "New profile", Colour = Templates.Colours[Settings.Profiles.Count % Templates.Colours.Length], Values = source?.IsStarting == false ? source.Values.ToDictionary(entry => entry.Key, entry => entry.Value.Clone()) : new(), SpeedAc = source?.IsStarting == false ? source.SpeedAc : null, SpeedDc = source?.IsStarting == false ? source.SpeedDc : null }; Settings.Profiles.Add(profile); selectedProfileId = profile.Id; Settings.Save(); FillProfiles(); }));
         profileList.Children.Add(Link("✨ Set up with the wizard", App.OpenWizard));
+    }
+
+    // What turns this profile on, gathered from Automatic switching: "⚡ Home dock connected · otherwise"; rules that can never win are left out
+    UIElement TurnsOnLine(Profile profile)
+    {
+        var reasons = Settings.Situations.Where(situation => situation.ProfileId == profile.Id && Engine.CoveredBy(Settings.Situations, situation) == null).Select(Engine.Words).ToList();
+        if (Settings.DefaultProfileId == profile.Id) reasons.Add(Settings.Situations.Count == 0 ? "always" : "otherwise");
+        var line = new TextBlock { FontSize = 11.5, Margin = new Thickness(0, 6, 0, 0), TextWrapping = TextWrapping.Wrap, Foreground = reasons.Count == 0 ? quietBrush : new SolidColorBrush(Color.FromRgb(0x2F, 0x6F, 0xB8)) };
+        line.Inlines.Add(new System.Windows.Documents.Run("\uE945 ") { FontFamily = new FontFamily("Segoe MDL2 Assets") });
+        line.Inlines.Add(reasons.Count == 0 ? "Only when picked by hand" : "Turns on: " + string.Join(" · ", reasons));
+        return line;
+    }
+
+    // A round green play button: "use this profile now"
+    Border PlayButton(Action action)
+    {
+        var green = new SolidColorBrush(Color.FromRgb(0x2E, 0xA0, 0x5A));
+        var play = new Border { Width = 30, Height = 30, CornerRadius = new CornerRadius(15), Background = green, Cursor = Cursors.Hand, ToolTip = "Use this profile now", VerticalAlignment = VerticalAlignment.Center, Child = new TextBlock { Text = "\uE768", FontFamily = new FontFamily("Segoe MDL2 Assets"), Foreground = Brushes.White, FontSize = 12, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(2, 0, 0, 0) } };
+        play.MouseEnter += (sender, args) => play.Background = new SolidColorBrush(Color.FromRgb(0x25, 0x8A, 0x4C)); play.MouseLeave += (sender, args) => play.Background = green;
+        play.MouseLeftButtonUp += (sender, args) => { args.Handled = true; action(); };
+        return play;
+    }
+
+    void DuplicateProfile(Profile source)
+    {
+        var copy = new Profile { Name = source.IsStarting ? "My profile" : source.Name + " copy", Colour = Templates.Colours[Settings.Profiles.Count % Templates.Colours.Length], Values = source.Values.ToDictionary(entry => entry.Key, entry => entry.Value.Clone()), SpeedAc = source.SpeedAc, SpeedDc = source.SpeedDc, AppsToStop = source.AppsToStop.Select(app => new AppToStop { Path = app.Path, Name = app.Name, OnBatteryOnly = app.OnBatteryOnly }).ToList() };
+        Settings.Profiles.Insert(Settings.Profiles.IndexOf(source) + 1, copy); selectedProfileId = copy.Id; Changed(); FillProfiles();
+    }
+
+    void DeleteProfile(Profile profile)
+    {
+        if (MessageBox.Show(this, $"Delete the {profile.Name} profile?", "WinSwitch", MessageBoxButton.OKCancel) != MessageBoxResult.OK) return;
+        Settings.Profiles.Remove(profile);
+        foreach (var situation in Settings.Situations.Where(situation => situation.ProfileId == profile.Id)) situation.ProfileId = Settings.DefaultProfileId;
+        if (Settings.DefaultProfileId == profile.Id) Settings.DefaultProfileId = Settings.Profiles[0].Id;
+        selectedProfileId = ""; Changed(); FillProfiles(); FillSituations();
     }
 
     // One readable line per profile: "Screen off after 30 minutes, never sleeps, fastest, Wi-Fi off"
@@ -110,11 +159,8 @@ public partial class SettingsWindow : Window
         var swatches = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(12, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
         foreach (var colour in Templates.Colours) { var swatch = Dot(colour, 18); swatch.Cursor = Cursors.Hand; swatch.Margin = new Thickness(0, 0, 6, 0); if (colour == profile.Colour) { swatch.BorderBrush = Brushes.Black; swatch.BorderThickness = new Thickness(2); } swatch.MouseLeftButtonUp += (sender, args) => { profile.Colour = colour; Changed(); FillProfileEditor(); }; swatches.Children.Add(swatch); }
         var headRow = new DockPanel { Margin = new Thickness(0, 0, 0, 10) };
-        if (!profile.IsStarting && Settings.Profiles.Count > 1) { var delete = Button("Delete", () => { if (MessageBox.Show(this, $"Delete the {profile.Name} profile?", "WinSwitch", MessageBoxButton.OKCancel) != MessageBoxResult.OK) return; Settings.Profiles.Remove(profile); foreach (var situation in Settings.Situations.Where(situation => situation.ProfileId == profile.Id)) situation.ProfileId = Settings.DefaultProfileId; if (Settings.DefaultProfileId == profile.Id) Settings.DefaultProfileId = Settings.Profiles[0].Id; selectedProfileId = ""; Changed(); FillProfiles(); FillSituations(); }); delete.Margin = new Thickness(0); DockPanel.SetDock(delete, Dock.Right); headRow.Children.Add(delete); }
         headRow.Children.Add(new StackPanel { Orientation = Orientation.Horizontal, Children = { nameBox, swatches } });
         profileEditor.Children.Add(headRow);
-        var useButton = Button(App.Engine.ActiveProfile?.Id == profile.Id ? "On now" : "Use now", () => { App.Engine.HoldProfile(profile.Id); }); useButton.IsEnabled = App.Engine.ActiveProfile?.Id != profile.Id;
-        profileEditor.Children.Add(new WrapPanel { Margin = new Thickness(0, 0, 0, 10), Children = { useButton } });
         // Starting profile is locked (greyed) until Edit and a warning, so it can be trusted to mean "how it was" (Mat 17 Nov)
         var locked = profile.IsStarting && !startingUnlocked;
         if (locked)
@@ -273,7 +319,11 @@ public partial class SettingsWindow : Window
         var current = profile.Get(setting.Key) is { } pair ? (pluggedIn ? pair.Ac : pair.Dc) : null;
         if (current != null && options.All(option => option.Value != current)) options.Add(new Option(current.Value, setting.Describe(current.Value)));
         var combo = new ComboBox { Margin = new Thickness(pluggedIn ? 0 : 10, 3, 0, 3), MaxDropDownHeight = 320 };
-        combo.Items.Add(new ComboBoxItem { Content = "Leave as it is", Tag = null, Foreground = quietBrush });
+        // What "not set" means here: Starting profile's value, or (for brightness, volume, radios, and inside tweaks) left alone
+        var starting = Settings.Profiles.FirstOrDefault(candidate => candidate.IsStarting);
+        var fallback = starting != null && starting != profile && profile is not Tweak && !Catalog.YoursToChange.Contains(setting.Key) && starting.Get(setting.Key) is { } startingPair && (pluggedIn || !setting.TwoSided ? startingPair.Ac : startingPair.Dc) is { } startingValue ? startingValue : (int?)null;
+        var notSetLabel = fallback is { } value ? $"As Starting profile ({(setting.Kind == SettingKind.Refresh ? $"{value} Hz" : setting.Describe(value))})" : profile is Tweak ? "As the profile has it" : "Leave as it is";
+        combo.Items.Add(new ComboBoxItem { Content = notSetLabel, Tag = null, Foreground = quietBrush });
         foreach (var option in options) combo.Items.Add(new ComboBoxItem { Content = option.Label, Tag = option.Value });
         combo.SelectedItem = combo.Items.Cast<ComboBoxItem>().FirstOrDefault(item => item.Tag is int value && value == current) ?? combo.Items[0];
         combo.SelectionChanged += (sender, args) =>
@@ -326,57 +376,92 @@ public partial class SettingsWindow : Window
         AddDials(tweakEditor, tweak);
     }
 
-    // ---- Situations (SPEC.md › Situations) ----
+    // ---- Automatic switching: the rules (SPEC.md › Situations) ----
     StackPanel? learnPanel;
     Inventory? learnBefore;
+    // Rules read as sentences: "When the Home dock is connected, use Desk"; the first that matches wins; Otherwise is last. Adding is a row of tiles (Mat 17 Nov)
     void FillSituations()
     {
         situationsPage.Children.Clear();
-        situationsPage.Children.Add(Text("The first one that matches picks the profile.", 13, false, quietBrush, new Thickness(0, 0, 0, 10)));
-        var current = App.Engine.SituationId;
+        situationsPage.Children.Add(Callout("WinSwitch picks a profile by itself from what's happening. Each rule says: when this happens, use that profile. The first rule that matches wins, so put the most specific ones at the top. A profile picked from the tray menu stays on until something here changes."));
+        var current = App.Engine.SituationId; var present = App.Engine.Current.Things;
+        var greenBrush = new SolidColorBrush(Color.FromRgb(0x1D, 0x6B, 0x35));
         for (var index = 0; index < Settings.Situations.Count; index++)
         {
             var situation = Settings.Situations[index]; var position = index;
-            var what = situation.Kind switch { "battery" => $"On battery and under {situation.BatteryBelow}%", "network" => $"On {situation.Name}", _ => $"{situation.Name} is connected" };
-            var nameBox = new TextBox { Text = situation.Name, MinWidth = 160, Margin = new Thickness(0, 0, 8, 0), FontWeight = FontWeights.SemiBold, Visibility = situation.Kind == "battery" ? Visibility.Collapsed : Visibility.Visible };
-            nameBox.LostFocus += (sender, args) => { if (nameBox.Text.Trim() != "" && nameBox.Text.Trim() != situation.Name) { situation.Name = nameBox.Text.Trim(); Changed(); FillSituations(); } };
-            var head = new DockPanel();
-            var tools = new StackPanel { Orientation = Orientation.Horizontal };
-            tools.Children.Add(Button("↑", () => { if (position == 0) return; Settings.Situations.RemoveAt(position); Settings.Situations.Insert(position - 1, situation); Changed(); FillSituations(); }));
-            tools.Children.Add(Button("↓", () => { if (position >= Settings.Situations.Count - 1) return; Settings.Situations.RemoveAt(position); Settings.Situations.Insert(position + 1, situation); Changed(); FillSituations(); }));
-            tools.Children.Add(Button("Delete", () => { Settings.Situations.Remove(situation); Changed(); FillSituations(); }));
-            DockPanel.SetDock(tools, Dock.Right); head.Children.Add(tools);
-            head.Children.Add(Text((situation.Id == current ? "● " : "") + what, 14, true, situation.Id == current ? new SolidColorBrush(Color.FromRgb(0x1D, 0x6B, 0x35)) : null, new Thickness(0, 4, 0, 0)));
-            var body = new StackPanel { Children = { head } };
-            var use = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 8, 0, 0) };
-            if (situation.Kind != "battery") use.Children.Add(nameBox);
-            else { var below = new ComboBox { MinWidth = 80, Margin = new Thickness(0, 0, 8, 0) }; foreach (var level in new[] { 10, 15, 20, 25, 30, 40, 50 }) below.Items.Add(new ComboBoxItem { Content = $"Under {level}%", Tag = level }); below.SelectedItem = below.Items.Cast<ComboBoxItem>().FirstOrDefault(item => (int)item.Tag == situation.BatteryBelow) ?? below.Items[2]; below.SelectionChanged += (sender, args) => { situation.BatteryBelow = (int)((ComboBoxItem)below.SelectedItem).Tag; Changed(); }; use.Children.Add(below); }
-            use.Children.Add(Text("use", 13, false, quietBrush, new Thickness(0, 3, 8, 0)));
-            use.Children.Add(ProfilePicker(situation.ProfileId, id => { situation.ProfileId = id; Changed(); }));
-            body.Children.Add(use);
+            var glyph = situation.Kind switch { "battery" => "\uE850", "network" => "\uE701", _ => "\uE7F4" };
+            var when = situation.Kind switch { "battery" => "When I'm on battery and it's under", "network" => "When I'm on the network", _ => "When this is connected:" };
+            var sentence = new WrapPanel { VerticalAlignment = VerticalAlignment.Center };
+            sentence.Children.Add(Text(when, 13.5, false, null, new Thickness(0, 4, 8, 4)));
+            if (situation.Kind == "battery")
+            {
+                var below = new ComboBox { MinWidth = 70, Margin = new Thickness(0, 0, 8, 0), VerticalAlignment = VerticalAlignment.Center };
+                foreach (var level in new[] { 10, 15, 20, 25, 30, 40, 50 }) below.Items.Add(new ComboBoxItem { Content = $"{level}%", Tag = level });
+                below.SelectedItem = below.Items.Cast<ComboBoxItem>().FirstOrDefault(item => (int)item.Tag == situation.BatteryBelow) ?? below.Items[2];
+                below.SelectionChanged += (sender, args) => { situation.BatteryBelow = (int)((ComboBoxItem)below.SelectedItem).Tag; Changed(); };
+                sentence.Children.Add(below);
+            }
+            else
+            {
+                var nameBox = new TextBox { Text = situation.Name, MinWidth = 150, FontWeight = FontWeights.SemiBold, Padding = new Thickness(4, 2, 4, 2), Margin = new Thickness(0, 0, 8, 0), VerticalAlignment = VerticalAlignment.Center, ToolTip = "Its name; click to rename" };
+                nameBox.LostFocus += (sender, args) => { if (nameBox.Text.Trim() != "" && nameBox.Text.Trim() != situation.Name) { situation.Name = nameBox.Text.Trim(); Changed(); } };
+                sentence.Children.Add(nameBox);
+            }
+            sentence.Children.Add(Text("use", 13.5, false, null, new Thickness(0, 4, 8, 4)));
+            sentence.Children.Add(ProfilePicker(situation.ProfileId, id => { situation.ProfileId = id; Changed(); }));
+            // Small icon tools on the right: up, down, delete
+            var tools = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Top };
+            tools.Children.Add(IconTool("\uE70E", "Move up", position > 0, () => { Settings.Situations.RemoveAt(position); Settings.Situations.Insert(position - 1, situation); Changed(); FillSituations(); }));
+            tools.Children.Add(IconTool("\uE70D", "Move down", position < Settings.Situations.Count - 1, () => { Settings.Situations.RemoveAt(position); Settings.Situations.Insert(position + 1, situation); Changed(); FillSituations(); }));
+            tools.Children.Add(IconTool("\uE74D", "Delete this rule", true, () => { Settings.Situations.Remove(situation); Changed(); FillSituations(); }));
+            var icon = new Border { Width = 32, Height = 32, CornerRadius = new CornerRadius(8), Background = new SolidColorBrush(Color.FromRgb(0xEE, 0xF4, 0xFC)), Margin = new Thickness(0, 0, 12, 0), VerticalAlignment = VerticalAlignment.Top, Child = new TextBlock { Text = glyph, FontFamily = new FontFamily("Segoe MDL2 Assets"), Foreground = accentBrush, FontSize = 15, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center } };
+            var body = new StackPanel { Children = { sentence } };
+            if (Engine.CoveredBy(Settings.Situations, situation) is { } coveredBy) body.Children.Add(new Border { Style = (Style)FindResource("Warning"), Margin = new Thickness(0, 8, 0, 0), Child = Text($"Never used: the rule above for {Engine.Words(coveredBy)} always matches first. Delete this one, or move it up to make it win.", 12.5, false, new SolidColorBrush(Color.FromRgb(0x6B, 0x45, 0x00))) });
+            if (situation.Id == current) body.Children.Add(new Border { Background = new SolidColorBrush(Color.FromRgb(0xE3, 0xF4, 0xE8)), CornerRadius = new CornerRadius(9), Padding = new Thickness(8, 1, 8, 2), Margin = new Thickness(0, 6, 0, 0), HorizontalAlignment = HorizontalAlignment.Left, Child = Text("Matching now", 11, true, greenBrush) });
             if (situation.Things.Count > 0)
             {
-                var present = App.Engine.Current.Things;
-                var list = new StackPanel(); foreach (var (thing, name) in situation.Things) list.Children.Add(Text((present.ContainsKey(thing) ? "● " : "○ ") + name, 12, false, quietBrush, new Thickness(0, 2, 0, 0)));
-                body.Children.Add(new Expander { Header = situation.Kind == "dock" ? $"Recognised by ({situation.Things.Count}, matches when most are connected)" : $"Recognised by ({situation.Things.Count})", Style = (Style)FindResource("More"), Content = list });
+                var list = new StackPanel(); foreach (var (thing, name) in situation.Things) list.Children.Add(Text((present.ContainsKey(thing) ? "● " : "○ ") + name + (present.ContainsKey(thing) ? "" : "  (not connected now)"), 12, false, quietBrush, new Thickness(0, 2, 0, 0)));
+                body.Children.Add(new Expander { Header = situation.Kind == "dock" ? $"How WinSwitch recognises it ({situation.Things.Count} things; most of them must be connected)" : "How WinSwitch recognises it", Style = (Style)FindResource("More"), Content = list });
             }
-            situationsPage.Children.Add(Card(body));
+            var row = new DockPanel { Children = { icon, tools, body } }; DockPanel.SetDock(icon, Dock.Left); DockPanel.SetDock(tools, Dock.Right);
+            var card = Card(row); if (situation.Id == current) { card.BorderBrush = new SolidColorBrush(Color.FromRgb(0x9F, 0xD6, 0xB0)); card.BorderThickness = new Thickness(1.5); }
+            situationsPage.Children.Add(card);
         }
-        // Anything else
-        var anything = new StackPanel { Orientation = Orientation.Horizontal };
-        anything.Children.Add(Text((current == "default" ? "● " : "") + "Anything else, use", 14, true, current == "default" ? new SolidColorBrush(Color.FromRgb(0x1D, 0x6B, 0x35)) : null, new Thickness(0, 3, 10, 0)));
-        anything.Children.Add(ProfilePicker(Settings.DefaultProfileId, id => { Settings.DefaultProfileId = id; Changed(); }));
-        situationsPage.Children.Add(Card(anything));
-        // Add
-        var inventory = App.Engine.Current;
-        var adds = new WrapPanel { Margin = new Thickness(0, 4, 0, 0) };
-        adds.Children.Add(Button("Learn what I plug in…", StartLearning, true));
-        var docked = Engine.DockLike(inventory.Things);
-        if (docked.Count > 0) adds.Children.Add(Button("Use what's connected now", () => AddSituation(new Situation { Kind = "dock", Name = docked.Values.First() + " dock", Things = docked })));
-        if (inventory.NetworkThing != "") adds.Children.Add(Button("This network", () => AddSituation(new Situation { Kind = "network", Name = inventory.NetworkName, Things = new() { [inventory.NetworkThing] = inventory.NetworkName } })));
-        if (PowerApi.PowerStatus().hasBattery) adds.Children.Add(Button("Battery low", () => AddSituation(new Situation { Kind = "battery", Name = "Battery low", BatteryBelow = 20 })));
-        situationsPage.Children.Add(adds);
+        // Otherwise
+        var otherwise = new WrapPanel(); otherwise.Children.Add(Text(Settings.Situations.Count == 0 ? "Always use" : "Otherwise, use", 13.5, true, null, new Thickness(0, 4, 8, 4))); otherwise.Children.Add(ProfilePicker(Settings.DefaultProfileId, id => { Settings.DefaultProfileId = id; Changed(); }));
+        var otherwiseCard = Card(new StackPanel { Children = { otherwise, current == "default" ? new Border { Background = new SolidColorBrush(Color.FromRgb(0xE3, 0xF4, 0xE8)), CornerRadius = new CornerRadius(9), Padding = new Thickness(8, 1, 8, 2), Margin = new Thickness(0, 6, 0, 0), HorizontalAlignment = HorizontalAlignment.Left, Child = Text("Matching now", 11, true, greenBrush) } : new Border() } });
+        situationsPage.Children.Add(otherwiseCard);
+        // Add a rule: tiles that say what each one does
+        situationsPage.Children.Add(Text("Add a rule", 14.5, true, null, new Thickness(0, 14, 0, 8)));
+        var tiles = new WrapPanel();
+        var inventory = App.Engine.Current; var docked = Engine.DockLike(inventory.Things);
+        tiles.Children.Add(Tile("\uE7F4", "A dock, monitor or device", "Unplug it, plug it back in, and WinSwitch learns what it brings.", StartLearning));
+        bool Exists(string kind, IEnumerable<string> keys) => Settings.Situations.Any(situation => situation.Kind == kind && situation.Things.Keys.ToHashSet().SetEquals(keys));
+        if (docked.Count > 0 && !Exists("dock", docked.Keys)) tiles.Children.Add(Tile("\uE7F4", "What's plugged in now", string.Join(", ", docked.Values.Distinct().Take(2)) + ". No unplugging needed.", () => AddSituation(new Situation { Kind = "dock", Name = docked.Values.First() + " dock", Things = docked })));
+        if (inventory.NetworkThing != "" && !Exists("network", new[] { inventory.NetworkThing })) tiles.Children.Add(Tile("\uE701", "This network", $"{inventory.NetworkName}, recognised by its router.", () => AddSituation(new Situation { Kind = "network", Name = inventory.NetworkName, Things = new() { [inventory.NetworkThing] = inventory.NetworkName } })));
+        var lowestBattery = Settings.Situations.Where(situation => situation.Kind == "battery").Select(situation => situation.BatteryBelow).DefaultIfEmpty(30).Min();
+        if (PowerApi.PowerStatus().hasBattery && lowestBattery > 10) { var level = lowestBattery == 30 && !Settings.Situations.Any(situation => situation.Kind == "battery") ? 20 : Math.Max(10, lowestBattery - 10); tiles.Children.Add(Tile("\uE850", "Battery running low", $"On battery and under {level}% (you can change the level).", () => AddSituation(new Situation { Kind = "battery", Name = "Battery low", BatteryBelow = level }))); }
+        situationsPage.Children.Add(tiles);
         if (learnPanel != null) situationsPage.Children.Add(learnPanel);
+    }
+
+    static Border IconTool(string glyph, string tip, bool enabled, Action action)
+    {
+        var tool = new Border { Width = 28, Height = 28, CornerRadius = new CornerRadius(6), Background = Brushes.Transparent, Cursor = enabled ? Cursors.Hand : Cursors.Arrow, ToolTip = tip, Opacity = enabled ? 1 : 0.3, Child = new TextBlock { Text = glyph, FontFamily = new FontFamily("Segoe MDL2 Assets"), FontSize = 12, Foreground = quietBrush, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center } };
+        if (!enabled) return tool;
+        tool.MouseEnter += (sender, args) => tool.Background = new SolidColorBrush(Color.FromRgb(0xEE, 0xF1, 0xF5)); tool.MouseLeave += (sender, args) => tool.Background = Brushes.Transparent;
+        tool.MouseLeftButtonUp += (sender, args) => { args.Handled = true; action(); };
+        return tool;
+    }
+
+    Border Tile(string glyph, string title, string detail, Action action)
+    {
+        var tile = new Border { Width = 250, Background = Brushes.White, BorderBrush = lineBrush, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(8), Padding = new Thickness(14, 12, 14, 12), Margin = new Thickness(0, 0, 10, 10), Cursor = Cursors.Hand,
+            Child = new StackPanel { Children = { new StackPanel { Orientation = Orientation.Horizontal, Children = { new TextBlock { Text = glyph, FontFamily = new FontFamily("Segoe MDL2 Assets"), Foreground = accentBrush, FontSize = 14, Margin = new Thickness(0, 2, 8, 0) }, Text("＋ " + title, 13.5, true) } }, Text(detail, 12, false, quietBrush, new Thickness(0, 4, 0, 0)) } } };
+        tile.MouseEnter += (sender, args) => { tile.BorderBrush = accentBrush; tile.Background = new SolidColorBrush(Color.FromRgb(0xF7, 0xFA, 0xFE)); };
+        tile.MouseLeave += (sender, args) => { tile.BorderBrush = lineBrush; tile.Background = Brushes.White; };
+        tile.MouseLeftButtonUp += (sender, args) => action();
+        return tile;
     }
 
     void AddSituation(Situation situation) { situation.ProfileId = App.Engine.ActiveProfile?.Id ?? Settings.DefaultProfileId; Settings.Situations.Insert(0, situation); Changed(); FillSituations(); }
