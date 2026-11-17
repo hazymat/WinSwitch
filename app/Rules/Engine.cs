@@ -96,11 +96,12 @@ public sealed class Engine
         SituationId = situationId; Reason = reason; ActiveProfile = profile; ActiveTweaks = tweaks; lastPluggedIn = pluggedIn;
         if (profile == null) { Changed?.Invoke(); return; }
         var effective = Effective(profile, tweaks, Settings.Profiles.FirstOrDefault(candidate => candidate.IsStarting));
-        var signature = profile.Id + "|" + string.Join(",", tweaks.Select(tweak => tweak.Id)) + "|" + pluggedIn + "|" + System.Text.Json.JsonSerializer.Serialize(effective);
+        var signature = profile.Id + "|" + string.Join(",", tweaks.Select(tweak => tweak.Id)) + "|" + pluggedIn + "|" + profile.SoundOutput + "|" + System.Text.Json.JsonSerializer.Serialize(effective);
         var signatureChanged = force || signature != lastSignature;
         if (signatureChanged)
         {
             lastSignature = signature;
+            if (profile.SoundOutput != "" && !Direct.SetOutput(profile.SoundOutput)) CrashReporter.Write($"Sound output {profile.SoundOutputName} isn't plugged in; left as it is", null, false); // before volume, which applies to the default output
             await ApplyAsync(effective, pluggedIn);
             ApplyVolumeChanges(tweaks);
         }

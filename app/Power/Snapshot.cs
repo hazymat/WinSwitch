@@ -3,6 +3,7 @@ using System.Text.Json;
 using Microsoft.Win32;
 using Windows.Devices.Radios;
 using WinSwitch.Settings;
+using WinSwitch.Shell;
 namespace WinSwitch.Power;
 
 // How the PC was before WinSwitch changed anything, taken once on first run (SPEC.md › Original settings)
@@ -14,6 +15,7 @@ public class Snapshot
     public Dictionary<string, SidePair> Values { get; set; } = new();
     public List<Direct.DevicePower> Devices { get; set; } = new(); // device power saving and wake flags (read only for now)
     public string SoundOutput { get; set; } = "";
+    public string SoundOutputId { get; set; } = "";
     public List<SnapshotSection> Sections { get; set; } = new(); // everything read, as shown on the capture screen (settings and, for reference, apps, tasks and services)
 
     static readonly JsonSerializerOptions jsonOptions = new() { WriteIndented = true };
@@ -34,7 +36,7 @@ public class Snapshot
         foreach (var other in PowerApi.Schemes().Where(scheme => scheme != plan)) Report(SectionTitles[0], "", $"Also on this PC: {PowerApi.SchemeName(other)} {{{other}}}");
         snapshot.Values = await Reader.ReadAllAsync(plan);
         snapshot.Devices = Direct.DevicePowerFlags();
-        snapshot.SoundOutput = Direct.OutputName();
+        snapshot.SoundOutput = Direct.OutputName(); snapshot.SoundOutputId = Direct.OutputId();
         // Power mode has a plugged-in and an on-battery choice, kept by Windows in the registry (read only)
         try
         {
@@ -88,7 +90,7 @@ public static class Reader
         foreach (var setting in Catalog.All)
         {
             if (setting.Kind == SettingKind.Plan) { var ac = PowerApi.Read(plan, setting.Subgroup, setting.Setting, true); var dc = PowerApi.Read(plan, setting.Subgroup, setting.Setting, false); if (ac != null || dc != null) values[setting.Key] = new SidePair { Ac = (int?)ac, Dc = (int?)dc }; continue; }
-            int? now = setting.Kind switch { SettingKind.Brightness => Direct.Brightness(), SettingKind.PowerMode => Direct.PowerMode(), SettingKind.Refresh => Direct.RefreshRates().Count > 1 ? Direct.RefreshRate() : null, SettingKind.Volume => Direct.Volume(), SettingKind.WiFi => await Direct.RadioState(RadioKind.WiFi), SettingKind.Bluetooth => await Direct.RadioState(RadioKind.Bluetooth), SettingKind.MobileBroadband => await Direct.RadioState(RadioKind.MobileBroadband), _ => null };
+            int? now = setting.Kind switch { SettingKind.Brightness => Direct.Brightness(), SettingKind.PowerMode => Direct.PowerMode(), SettingKind.Refresh => Direct.RefreshRates().Count > 1 ? Direct.RefreshRate() : null, SettingKind.Volume => Direct.Volume(), SettingKind.WiFi => await Direct.RadioState(RadioKind.WiFi), SettingKind.Bluetooth => await Direct.RadioState(RadioKind.Bluetooth), SettingKind.MobileBroadband => await Direct.RadioState(RadioKind.MobileBroadband), SettingKind.Helper => await HelperClient.ReadSettingAsync(setting.Key), _ => null };
             if (now == null) continue;
             // Outside the plan only the current side can be read; the other side starts the same
             values[setting.Key] = setting.TwoSided ? new SidePair { Ac = now, Dc = now } : new SidePair { Ac = now };
@@ -123,6 +125,7 @@ public static class Writer
             SettingKind.WiFi => await Direct.RadioState(RadioKind.WiFi) == value || await Direct.SetRadio(RadioKind.WiFi, value == 1),
             SettingKind.Bluetooth => await Direct.RadioState(RadioKind.Bluetooth) == value || await Direct.SetRadio(RadioKind.Bluetooth, value == 1),
             SettingKind.MobileBroadband => await Direct.RadioState(RadioKind.MobileBroadband) == value || await Direct.SetRadio(RadioKind.MobileBroadband, value == 1),
+            SettingKind.Helper => !HelperClient.Installed || await HelperClient.ReadSettingAsync(setting.Key) == value || await HelperClient.WriteSettingAsync(setting.Key, value.Value), // skipped quietly without the helper
             _ => true,
         };
     }
@@ -148,6 +151,7 @@ public static class Restorer
             catch { }
         }
         if (planExists) PowerApi.SetActiveScheme(originalPlan);
+        if (snapshot.SoundOutputId != "") try { Direct.SetOutput(snapshot.SoundOutputId); } catch { }
         if (deletePlan && Guid.TryParse(settings.Power.OwnPlan, out var ownPlan) && ownPlan != originalPlan && PowerApi.Schemes().Contains(ownPlan)) PowerApi.Delete(ownPlan);
     }
 }

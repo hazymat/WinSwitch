@@ -42,5 +42,10 @@
     <Resource Include="Assets\WinSwitch.ico" />
     <EmbeddedResource Include="Remote\phone.html" LogicalName="WinSwitch.Remote.phone.html" />
     <EmbeddedResource Include="Remote\phone-icon.png" LogicalName="WinSwitch.Remote.phone-icon.png" />
+    <EmbeddedResource Include="..\helper\bin\Release\net48\WinSwitchHelper.exe" LogicalName="WinSwitch.Helper.exe" />
   </ItemGroup>
+  <!-- The helper service (.NET Framework 4.8, one small exe) is built first and carried inside WinSwitch, which installs it on request -->
+  <Target Name="BuildHelper" BeforeTargets="PrepareForBuild">
+    <Exec Command="dotnet build &quot;$(MSBuildThisFileDirectory)..\helper\WinSwitchHelper.csproj&quot; -c Release -nologo -v q" />
+  </Target>
 </Project>

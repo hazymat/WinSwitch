@@ -13,6 +13,7 @@ public partial class App : Application
     public AppUpdater Updater { get; } = new();
     public Notices Notices { get; private set; } = null!;
     public Engine Engine { get; } = new();
+    public Suggestions Suggestions { get; } = new();
     public Apps.AppStopper Apps { get; } = new();
     public Remote.PhoneServer Phone { get; } = new();
     public Remote.MqttLink Mqtt { get; private set; } = null!;
@@ -54,9 +55,9 @@ public partial class App : Application
             Settings.Save();
         }
         trayIcon = new TrayIcon();
-        Engine.Start();
+        Engine.Start(); Suggestions.Start();
         Mqtt = new Remote.MqttLink();
-        Phone.Apply(); _ = Mqtt.ApplyAsync();
+        Phone.Apply(); _ = Mqtt.ApplyAsync(); _ = OfferHelperUpdateAsync();
         if (CrashReporter.TakeUnseenReport()) Notices.Info("WinSwitch had a problem last time", "Details are in Settings › About › Open logs (crash.log).", always: true);
         if (!Settings.General.WizardDone) { if (captureWindow?.IsVisible == true) captureWindow.Closed += (sender, args) => OpenWizard(); else OpenWizard(); }
     }
@@ -103,6 +104,14 @@ public partial class App : Application
     {
         Settings.Save(); IsQuitting = true;
         singleInstanceMutex?.ReleaseMutex(); singleInstanceMutex?.Dispose(); singleInstanceMutex = null;
+    }
+
+    // A newer helper rides along with app updates; installing it needs one admin prompt, so it's offered, never done silently
+    async Task OfferHelperUpdateAsync()
+    {
+        await Task.Delay(8000);
+        if (!Shell.HelperClient.Installed || await Shell.HelperClient.VersionAsync() is not { Length: > 0 } version || !Shell.HelperClient.NeedsUpdate(version)) return;
+        Notices.Info("Update the helper", $"This WinSwitch carries helper {Shell.HelperClient.BundledVersion} (you have {version}). Windows asks for admin permission once.", () => _ = Shell.HelperClient.InstallAsync(), "Update", always: true);
     }
 
     public void Quit()

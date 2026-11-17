@@ -1,7 +1,7 @@
 namespace WinSwitch.Power;
 
 // How a setting is reached: a power plan value (powrprof), or one of the few things outside the plan
-public enum SettingKind { Plan, Brightness, PowerMode, Refresh, WiFi, Bluetooth, MobileBroadband, Volume }
+public enum SettingKind { Plan, Brightness, PowerMode, Refresh, WiFi, Bluetooth, MobileBroadband, Volume, Helper }
 
 public record Option(int Value, string Label);
 
@@ -70,6 +70,8 @@ public static class Catalog
         new("mobile", Wireless, "Mobile data (SIM)", SettingKind.MobileBroadband, false, true, offOn), // hidden on laptops without one
         new("graphics", Wireless, "Graphics power (laptops with two graphics chips)", SettingKind.Plan, true, false, Choices("Force power saving", "Save power", "Performance", "Full performance"), new("e276e160-7cb0-43c6-b20b-73f5dce39954"), new("a1662ab2-9d34-4e53-ba8b-2639b9e20857")),
         new("videoPlayback", Wireless, "When playing video", SettingKind.Plan, true, false, Choices("Best picture", "Balanced", "Save power"), new("9596fb26-9850-41fd-ac3e-f7c3c00afd4b"), new("34c7b99f-9a6d-4b3c-8dc7-b6693b78cef4")),
+        new("wakeInput", Wireless, "Mouse and keyboard can wake the PC", SettingKind.Helper, false, false, offOn), // helper: stops a mouse in the bag waking the laptop
+        new("wakeOnLan", Wireless, "Wake on LAN (wired network)", SettingKind.Helper, false, false, offOn), // helper
         // Sound
         new("volume", Sound, "Volume", SettingKind.Volume, false, true, Percent(5)),
     };

@@ -21,6 +21,8 @@ public class Profile
     public int? SpeedAc { get; set; } // Battery or speed dial position (0..4), null = not set
     public int? SpeedDc { get; set; }
     public List<AppToStop> AppsToStop { get; set; } = new(); // SPEC.md › Apps to stop
+    public string SoundOutput { get; set; } = ""; // device id; empty = leave the output as it is
+    public string SoundOutputName { get; set; } = ""; // shown when that device isn't plugged in
     public SidePair? Get(string key) => Values.TryGetValue(key, out var pair) && (pair.Ac != null || pair.Dc != null) ? pair : null;
 }
 
@@ -62,6 +64,25 @@ public class Situation
     public Dictionary<string, string> Things { get; set; } = new(); // thing -> readable name
     public int BatteryBelow { get; set; } = 20;
     public string ProfileId { get; set; } = "";
+}
+
+// What WinSwitch noticed, and the one suggestion waiting (SPEC.md › Suggestions)
+public class SuggestionState
+{
+    public Dictionary<string, List<string>> Seen { get; set; } = new(); // observation -> days it was seen (yyyy-MM-dd)
+    public List<string> Answered { get; set; } = new(); // never asked twice
+    public DateTime? LastShown { get; set; }
+    public Suggestion? Waiting { get; set; }
+}
+
+public class Suggestion
+{
+    public string Id { get; set; } = "";
+    public string Text { get; set; } = "";
+    public string ProfileId { get; set; } = "";
+    public string Key { get; set; } = ""; // the setting it changes in that profile
+    public int? Ac { get; set; }
+    public int? Dc { get; set; }
 }
 
 public class GeneralSettings
@@ -117,6 +138,7 @@ public class AppSettings
     public string DefaultProfileId { get; set; } = ""; // Anything else
     public PowerState Power { get; set; } = new();
     public RemoteSettings Remote { get; set; } = new();
+    public SuggestionState Suggestions { get; set; } = new();
 
     static readonly JsonSerializerOptions jsonOptions = new() { WriteIndented = true };
     public Profile? ProfileById(string id) => Profiles.FirstOrDefault(profile => profile.Id == id);

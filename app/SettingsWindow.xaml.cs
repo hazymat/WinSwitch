@@ -23,7 +23,7 @@ public partial class SettingsWindow : Window
     {
         InitializeComponent();
         settingsTabs.SelectedItem = profilesTab;
-        WireGeneralTab(); WireAboutTab(); WireRemoteTabs();
+        WireGeneralTab(); WireAboutTab(); WireRemoteTabs(); WireHelperTab();
         FillProfiles(); FillTweaks(); FillSituations(); _ = FillOriginalAsync();
         KeyDown += (sender, keyArgs) => { if (keyArgs.Key == Key.Escape && !keyArgs.Handled && keyArgs.OriginalSource is not TextBox) { keyArgs.Handled = true; Close(); } };
         App.SettingsChanged += OnOutsideChange; App.Engine.Changed += OnEngineChanged;
@@ -50,7 +50,7 @@ public partial class SettingsWindow : Window
 
     public void SelectTab(string tabName, string profileId = "")
     {
-        var tabByName = new Dictionary<string, TabItem> { ["Profiles"] = profilesTab, ["Tweaks"] = tweaksTab, ["Situations"] = situationsTab, ["Original"] = originalTab, ["Phone"] = phoneTab, ["HomeAssistant"] = mqttTab, ["Allowed"] = allowedTab, ["RemoteLog"] = remoteLogTab, ["General"] = generalTab, ["About"] = aboutTab };
+        var tabByName = new Dictionary<string, TabItem> { ["Profiles"] = profilesTab, ["Tweaks"] = tweaksTab, ["Situations"] = situationsTab, ["Original"] = originalTab, ["Phone"] = phoneTab, ["HomeAssistant"] = mqttTab, ["Allowed"] = allowedTab, ["RemoteLog"] = remoteLogTab, ["General"] = generalTab, ["Helper"] = helperTab, ["About"] = aboutTab };
         if (tabByName.TryGetValue(tabName, out var selectedTab)) settingsTabs.SelectedItem = selectedTab;
         if (profileId != "") { selectedProfileId = profileId; FillProfiles(); }
     }
@@ -117,7 +117,7 @@ public partial class SettingsWindow : Window
 
     void DuplicateProfile(Profile source)
     {
-        var copy = new Profile { Name = source.IsStarting ? "My profile" : source.Name + " copy", Colour = Templates.Colours[Settings.Profiles.Count % Templates.Colours.Length], Values = source.Values.ToDictionary(entry => entry.Key, entry => entry.Value.Clone()), SpeedAc = source.SpeedAc, SpeedDc = source.SpeedDc, AppsToStop = source.AppsToStop.Select(app => new AppToStop { Path = app.Path, Name = app.Name, OnBatteryOnly = app.OnBatteryOnly }).ToList() };
+        var copy = new Profile { Name = source.IsStarting ? "My profile" : source.Name + " copy", Colour = Templates.Colours[Settings.Profiles.Count % Templates.Colours.Length], Values = source.Values.ToDictionary(entry => entry.Key, entry => entry.Value.Clone()), SpeedAc = source.SpeedAc, SpeedDc = source.SpeedDc, AppsToStop = source.AppsToStop.Select(app => new AppToStop { Path = app.Path, Name = app.Name, OnBatteryOnly = app.OnBatteryOnly }).ToList(), SoundOutput = source.SoundOutput, SoundOutputName = source.SoundOutputName };
         Settings.Profiles.Insert(Settings.Profiles.IndexOf(source) + 1, copy); selectedProfileId = copy.Id; Changed(); FillProfiles();
     }
 
@@ -153,6 +153,14 @@ public partial class SettingsWindow : Window
     {
         profileEditor.Children.Clear();
         var profile = Settings.ProfileById(selectedProfileId); if (profile == null) return;
+        // A suggestion waiting (SPEC.md › Suggestions): Accept or No thanks, never asked twice
+        if (Settings.Suggestions.Waiting is { } suggestion)
+        {
+            var suggestionText = new TextBlock { Style = (Style)FindResource("CalloutText"), Text = suggestion.Text };
+            var answers = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 8, 0, 0), Children = { Button("Accept", () => { App.Suggestions.Answer(true); FillProfiles(); }, true), Button("No thanks", () => { App.Suggestions.Answer(false); FillProfileEditor(); }) } };
+            var body = new StackPanel { Children = { suggestionText, answers } };
+            profileEditor.Children.Add(new Border { Margin = new Thickness(0, 0, 0, 12), Style = (Style)FindResource("Callout"), Child = new DockPanel { Children = { new TextBlock { Style = (Style)FindResource("CalloutIcon") }, body } } });
+        }
         // Name, colour, Anything else, delete
         var nameBox = new TextBox { Text = profile.Name, FontSize = 17, FontWeight = FontWeights.SemiBold, MinWidth = 240, Padding = new Thickness(4, 2, 4, 2), IsReadOnly = profile.IsStarting };
         nameBox.TextChanged += (sender, args) => { if (nameBox.Text.Trim() != "") { profile.Name = nameBox.Text.Trim(); Changed(); } };
