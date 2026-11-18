@@ -10,11 +10,12 @@ public sealed class TrayIcon : IDisposable
     readonly ContextMenuStrip trayMenu = new();
     string iconKey = "";
     IntPtr iconHandle;
-    readonly System.Windows.Threading.DispatcherTimer flashTimer = new() { Interval = TimeSpan.FromMilliseconds(900) }; // update waiting
+    readonly System.Windows.Forms.Timer flashTimer = new() { Interval = 900 }; // update waiting: the icon until seen, the menu row whenever the menu is open
+    bool menuOpen;
     bool flashOn = true;
     string seenUpdate = ""; // the ready version the user has seen explained; it flashes until then, then stays solid blue
     bool UpdateUnseen => App.Updater.ReadyVersion != "" && seenUpdate != App.Updater.ReadyVersion;
-    ToolStripMenuItem? updateItem; // flashes with the icon while the menu is open
+    ToolStripMenuItem? updateItem; // flashes while the menu is open
     readonly Image blueDot = Dot("#4CC2FF"), amberDot = Dot("#E0912F"), noDot = new Bitmap(64, 64);
     readonly System.Windows.Threading.DispatcherTimer batteryTimer = new() { Interval = TimeSpan.FromMinutes(1) }; // the fill follows the charge
     App App => App.Instance;
@@ -25,6 +26,7 @@ public sealed class TrayIcon : IDisposable
         // Bold and small rows get their fonts once the menu is on its screen, from the menu's own font: fonts set earlier keep the main screen's scaling and come out tiny on a 200% screen
         trayMenu.Opened += (sender, args) =>
         {
+            menuOpen = true; Refresh();
             var menuFont = trayMenu.Font;
             foreach (ToolStripItem item in trayMenu.Items) { if (item.Tag is "bold") item.Font = new Font(menuFont, FontStyle.Bold); else if (item.Tag is "small") item.Font = new Font(menuFont.FontFamily, menuFont.Size * 0.85f); }
         };
@@ -37,11 +39,12 @@ public sealed class TrayIcon : IDisposable
             if (UpdateUnseen) { ShowUpdateCard(); return; }
             typeof(NotifyIcon).GetMethod("ShowContextMenu", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)?.Invoke(notifyIcon, null);
         };
-        trayMenu.Closed += (sender, args) => { if (updateItem != null) { seenUpdate = App.Updater.ReadyVersion; Refresh(); } }; // seen in the menu: the dot stops flashing
+        trayMenu.Closed += (sender, args) => { menuOpen = false; if (updateItem != null) seenUpdate = App.Updater.ReadyVersion; Refresh(); }; // seen in the menu: the tray dot stops flashing
         App.Engine.Changed += Refresh; App.Notices.Changed += Refresh; App.Updater.Changed += Refresh; PowerActions.AwakeChanged += Refresh;
         batteryTimer.Tick += (sender, args) => Refresh(); batteryTimer.Start();
-        flashTimer.Tick += (sender, args) => { flashOn = !flashOn; flashTimer.Interval = TimeSpan.FromMilliseconds(flashOn ? 900 : 500); if (updateItem != null) updateItem.Image = flashOn ? blueDot : noDot; Refresh(); };
+        flashTimer.Tick += (sender, args) => { flashOn = !flashOn; flashTimer.Interval = flashOn ? 900 : 500; if (menuOpen && updateItem != null) { updateItem.Image = flashOn ? blueDot : noDot; updateItem.Invalidate(); } Refresh(); };
         Microsoft.Win32.SystemEvents.UserPreferenceChanged += (sender, args) => Refresh(); // light or dark taskbar
+        Microsoft.Win32.SystemEvents.DisplaySettingsChanged += (sender, args) => Refresh(); // taskbar scaling
         Refresh();
     }
 
@@ -114,11 +117,12 @@ public sealed class TrayIcon : IDisposable
         var text = $"WinSwitch: {state}{power}{(PowerActions.Awake ? ", awake" : "")}";
         notifyIcon.Text = text.Length > 63 ? text[..63] : text;
         var colour = App.Settings.Power.Paused ? "" : engine.ActiveProfile?.Colour ?? "";
-        var question = App.Notices.Unanswered.Count > 0; var light = TaskbarIsLight(); var size = SystemInformation.SmallIconSize.Width;
+        var question = App.Notices.Unanswered.Count > 0; var light = TaskbarIsLight(); var size = TrayIconSize();
         // One dot: amber for a question, a slow blue flash while an update waits for a restart, otherwise the profile's colour
         var updateWaiting = App.Updater.ReadyVersion != ""; var updateUnseen = UpdateUnseen;
-        if (updateUnseen != flashTimer.IsEnabled) { flashOn = true; if (updateUnseen) flashTimer.Start(); else flashTimer.Stop(); }
-        var dot = question ? "#E0912F" : updateWaiting ? (flashOn ? "#4CC2FF" : "") : colour;
+        var flashing = updateUnseen || menuOpen && updateItem != null;
+        if (flashing != flashTimer.Enabled) { flashOn = true; if (flashing) flashTimer.Start(); else flashTimer.Stop(); }
+        var dot = question ? "#E0912F" : updateWaiting ? (!updateUnseen || flashOn ? "#4CC2FF" : "") : colour;
         var level = hasBattery ? Math.Clamp(percent, 0, 100) / 5 * 5 : 100; var charging = hasBattery && pluggedIn && percent < 100;
         var key = $"{dot}|{light}|{size}|{level}|{charging}";
         if (key == iconKey) return;
@@ -134,6 +138,16 @@ public sealed class TrayIcon : IDisposable
         seenUpdate = App.Updater.ReadyVersion; Refresh();
         App.Notices.Info("Update ready", $"WinSwitch {App.Updater.ReadyVersion} is downloaded. The blue dot stays until you restart.", () => _ = App.Updater.RestartToUpdateAsync(), "Restart now", always: true);
     }
+
+    // The size the taskbar shows tray icons at, from the taskbar's own scaling. SystemInformation.SmallIconSize is fixed at the scaling Windows had at sign-in, so after a dock change or restart the icon was drawn too small and blown up (fuzzy)
+    static int TrayIconSize()
+    {
+        try { var taskbar = FindWindow("Shell_TrayWnd", null); var dpi = taskbar == IntPtr.Zero ? 0u : GetDpiForWindow(taskbar); if (dpi > 0) return GetSystemMetricsForDpi(49 /* SM_CXSMICON */, dpi); } catch { }
+        return SystemInformation.SmallIconSize.Width;
+    }
+    [System.Runtime.InteropServices.DllImport("user32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode)] static extern IntPtr FindWindow(string className, string? windowName);
+    [System.Runtime.InteropServices.DllImport("user32.dll")] static extern uint GetDpiForWindow(IntPtr window);
+    [System.Runtime.InteropServices.DllImport("user32.dll")] static extern int GetSystemMetricsForDpi(int index, uint dpi);
 
     static bool TaskbarIsLight() { try { return Microsoft.Win32.Registry.GetValue(@"HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize", "SystemUsesLightTheme", 0) is int value && value == 1; } catch { return false; } }
     [System.Runtime.InteropServices.DllImport("user32.dll")] static extern bool DestroyIcon(IntPtr icon);
