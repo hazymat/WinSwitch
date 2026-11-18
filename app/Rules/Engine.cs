@@ -234,6 +234,30 @@ public sealed class Engine
         // Making the plan active (again) is what makes Windows use the new values
         PowerApi.SetActiveScheme(plan);
         Settings.Save();
+        _ = VerifyWritesAsync(plan, effective);
+    }
+
+    // Windows (or a policy on the PC) can put a plan value straight back after WinSwitch writes it, e.g. Sign in after waking on Mat's laptop after every update (18 Nov).
+    // Read back a few seconds later: a value Windows won't keep is left to Windows (hidden on this PC) instead of being reported as "You changed … in Windows"
+    bool verifyingWrites;
+    async Task VerifyWritesAsync(Guid plan, Dictionary<string, SidePair> effective)
+    {
+        verifyingWrites = true;
+        try
+        {
+            await Task.Delay(4000);
+            foreach (var (key, pair) in effective)
+            {
+                if (Catalog.Find(key) is not { Kind: SettingKind.Plan } setting || NotSupported.Contains(key)) continue;
+                var acNow = (int?)Reader.ReadPlan(plan, setting, true); var dcNow = (int?)Reader.ReadPlan(plan, setting, false);
+                if ((pair.Ac == null || acNow == pair.Ac) && (pair.Dc == null || dcNow == pair.Dc)) continue;
+                NotSupported.Add(key); Settings.Power.LastWritten[key] = new SidePair { Ac = acNow, Dc = dcNow };
+                CrashReporter.Write($"Windows put {setting.Label} back to its own value; left to Windows on this PC", null, false);
+            }
+            Settings.Save();
+        }
+        catch (Exception error) { CrashReporter.Write("Checking what Windows kept", error, false); }
+        finally { verifyingWrites = false; }
     }
 
     // A refresh rate change blanks the screen for a moment, so a card says so first (with a way out) and offers Undo after (Mat 17 Nov)
@@ -279,6 +303,7 @@ public sealed class Engine
     bool askedAboutPlan;
     void WatchWindowsChanges()
     {
+        if (verifyingWrites) return;
         if (Settings.Power.Paused || ActiveProfile == null || !Guid.TryParse(Settings.Power.OwnPlan, out var plan)) return;
         try
         {

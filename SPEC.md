@@ -219,6 +219,8 @@ Quiet by design: info cards are skipped while a full-screen app or Presenting is
 
 The two undocumented ones are marked fragile: after every write WinSwitch reads the value back, and if Windows didn't take it (or a Windows update broke it) that setting shows "Not working on this version of Windows" and is left alone, rather than fighting Windows. Every other setting gets the same read-back, so a setting a PC doesn't have (no hibernate, no refresh rate choice) is simply hidden.
 
+**Values Windows won't keep.** A few seconds after each write WinSwitch reads its plan values back; one Windows (or a policy) has put back is left to Windows on this PC (hidden, logged in crash.log) and is never reported as a change you made (Mat 18 Nov: "You changed Sign in after waking" after every update).
+
 **Changes you make in Windows win.** WinSwitch watches its settings for changes it didn't make (Windows Settings, Control Panel, Device Manager, another app). The change is kept straight away, never overwritten, and a WinSwitch question appears (see Notifications):
 
 > You changed **Lid close (plugged in)** to **Hibernate** in Windows.
