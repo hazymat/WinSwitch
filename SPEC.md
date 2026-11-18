@@ -195,6 +195,8 @@ WinSwitch's own small glass cards, sliding up just above the tray clock (as WinG
 
 An unanswered question (× or ignored) waits in the tray menu ("1 question" at the top, with a dot on the icon) and in Settings, and is never lost.
 
+Colours line up (Mat 18 Nov): a coloured dot on the tray icon always leads, in one click, to a card of the same colour. Amber = a message waiting (a question closed with ×): left-click the tray icon, or right-click › "Show message", shows it as an amber card (amber header dot, "WinSwitch · Message", amber button and edge), even during Do not disturb or full screen, because it was asked for. Blue = an update: the card has a blue dot and edge. Plain cards keep the green dot.
+
 Quiet by design: info cards are skipped while a full-screen app or Presenting is on, and while Windows' Do not disturb is on; questions wait until afterwards. Several changes within a few seconds (a dock connecting in stages) make one card. Settings › General › Notifications: **Profile changes** Show (default) / Questions only / Off, and **Sound** off by default.
 
 ## Playing nicely with Windows
