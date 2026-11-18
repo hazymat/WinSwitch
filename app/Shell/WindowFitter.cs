@@ -17,11 +17,11 @@ public static class WindowFitter
     {
         onDragEnd = (hook, eventType, window, objectId, childId, thread, time) => { if (objectId == 0) _ = CheckAfterDragAsync(window); };
         SetWinEventHook(0x000B /* EVENT_SYSTEM_MOVESIZEEND */, 0x000B, IntPtr.Zero, onDragEnd, 0, 0, 0 /* WINEVENT_OUTOFCONTEXT */);
-        displayTimer.Tick += (sender, args) => { displayTimer.Stop(); Check(AllWindows()); };
+        displayTimer.Tick += (sender, args) => { displayTimer.Stop(); var windows = AllWindows(); Check(windows); DpiFixer.Check(windows); };
         Microsoft.Win32.SystemEvents.DisplaySettingsChanged += (sender, args) => App.Instance.Dispatcher.BeginInvoke(() => { displayTimer.Stop(); displayTimer.Start(); });
     }
 
-    static async Task CheckAfterDragAsync(IntPtr window) { await Task.Delay(500); Check(new() { window }); } // the app rescales itself for the new screen first
+    static async Task CheckAfterDragAsync(IntPtr window) { await Task.Delay(500); Check(new() { window }); DpiFixer.Check(new() { window }); } // the app rescales itself for the new screen first
 
     static void Check(List<IntPtr> windows)
     {

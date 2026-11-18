@@ -97,6 +97,7 @@ public class GeneralSettings
     public string FitWindows { get; set; } = "ask"; // ask | always | never: other apps' windows bigger than their screen
     public List<string> IgnoredThings { get; set; } = new(); // docks and monitors you said to ignore
     public List<string> KnownThings { get; set; } = new(); // every monitor, adapter and device ever seen, so a new dock is asked about once
+    public List<string> DpiLeftAlone { get; set; } = new(); // apps you said to leave alone when their text came out tiny on another screen
 }
 
 // Remote control: the phone page (and Shortcuts) and MQTT for Home Assistant (SPEC.md › Remote control)
