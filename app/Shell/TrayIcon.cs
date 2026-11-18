@@ -12,6 +12,8 @@ public sealed class TrayIcon : IDisposable
     IntPtr iconHandle;
     readonly System.Windows.Threading.DispatcherTimer flashTimer = new() { Interval = TimeSpan.FromMilliseconds(900) }; // update waiting
     bool flashOn = true;
+    ToolStripMenuItem? updateItem; // flashes with the icon while the menu is open
+    readonly Image blueDot = Dot("#4CC2FF"), amberDot = Dot("#E0912F"), noDot = new Bitmap(12, 12);
     readonly System.Windows.Threading.DispatcherTimer batteryTimer = new() { Interval = TimeSpan.FromMinutes(1) }; // the fill follows the charge
     App App => App.Instance;
 
@@ -23,7 +25,7 @@ public sealed class TrayIcon : IDisposable
         notifyIcon.MouseUp += (sender, args) => { if (args.Button == MouseButtons.Left) typeof(NotifyIcon).GetMethod("ShowContextMenu", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)?.Invoke(notifyIcon, null); };
         App.Engine.Changed += Refresh; App.Notices.Changed += Refresh; App.Updater.Changed += Refresh; PowerActions.AwakeChanged += Refresh;
         batteryTimer.Tick += (sender, args) => Refresh(); batteryTimer.Start();
-        flashTimer.Tick += (sender, args) => { flashOn = !flashOn; flashTimer.Interval = TimeSpan.FromMilliseconds(flashOn ? 900 : 500); Refresh(); };
+        flashTimer.Tick += (sender, args) => { flashOn = !flashOn; flashTimer.Interval = TimeSpan.FromMilliseconds(flashOn ? 900 : 500); if (updateItem != null) updateItem.Image = flashOn ? blueDot : noDot; Refresh(); };
         Microsoft.Win32.SystemEvents.UserPreferenceChanged += (sender, args) => Refresh(); // light or dark taskbar
         Refresh();
     }
@@ -34,8 +36,10 @@ public sealed class TrayIcon : IDisposable
         var engine = App.Engine; var settings = App.Settings;
         // The version, just the number, in a small shaded row at the top
         trayMenu.Items.Add(new ToolStripMenuItem(App.Updater.CurrentVersion) { Enabled = false, BackColor = Color.FromArgb(236, 236, 236), Font = new Font(SystemFonts.MenuFont ?? Control.DefaultFont, FontStyle.Regular) });
-        if (App.Updater.ReadyVersion != "") trayMenu.Items.Add(Bold($"Restart to update to {App.Updater.ReadyVersion}", async () => await App.Updater.RestartToUpdateAsync()));
-        if (App.Notices.Unanswered.Count > 0) trayMenu.Items.Add(Bold(App.Notices.Unanswered.Count == 1 ? "1 question waiting" : $"{App.Notices.Unanswered.Count} questions waiting", App.Notices.ShowUnanswered));
+        // The same dots as the tray icon, so a flashing blue or amber dot leads to its explanation (Mat 18 Nov)
+        updateItem = null;
+        if (App.Updater.ReadyVersion != "") { updateItem = Bold($"Restart to update to {App.Updater.ReadyVersion}", async () => await App.Updater.RestartToUpdateAsync()); updateItem.Image = blueDot; trayMenu.Items.Add(updateItem); }
+        if (App.Notices.Unanswered.Count > 0) { var questionItem = Bold(App.Notices.Unanswered.Count == 1 ? "1 question waiting" : $"{App.Notices.Unanswered.Count} questions waiting", App.Notices.ShowUnanswered); questionItem.Image = amberDot; trayMenu.Items.Add(questionItem); }
         if (settings.Power.Paused)
         {
             trayMenu.Items.Add(new ToolStripMenuItem("WinSwitch is paused: Windows' own settings are in charge") { Enabled = false });
