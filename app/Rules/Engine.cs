@@ -227,7 +227,7 @@ public sealed class Engine
             {
                 var acNow = Reader.ReadPlan(plan, setting, true); var dcNow = Reader.ReadPlan(plan, setting, false);
                 if (acNow == null && dcNow == null) { NotSupported.Add(key); continue; }
-                ok = (pair.Ac == null || acNow == (uint)pair.Ac) && (pair.Dc == null || dcNow == (uint)pair.Dc) || Writer.WritePlan(plan, setting, pair);
+                ok = (pair.Ac == null || acNow == (uint)pair.Ac) && (pair.Dc == null || dcNow == (uint)pair.Dc) || await Writer.WritePlanAsync(plan, setting, pair);
                 Settings.Power.LastWritten[key] = new SidePair { Ac = pair.Ac ?? (int?)Reader.ReadPlan(plan, setting, true), Dc = pair.Dc ?? (int?)Reader.ReadPlan(plan, setting, false) };
             }
             else if (setting.Kind == SettingKind.Refresh) ok = await ChangeRefreshAsync(pair, pluggedIn);

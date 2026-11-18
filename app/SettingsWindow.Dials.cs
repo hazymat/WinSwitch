@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
@@ -108,7 +109,9 @@ public partial class SettingsWindow
         Stage("sleepAfter", "Sleep", "back in a few seconds", Color.FromRgb(0x3B, 0x3F, 0x8F), Color.FromRgb(0xE6, 0xE8, 0xFF), available("sleepAfter"));
         Stage("hibernateAfter", "Hibernate", "uses no battery", Color.FromRgb(0x1E, 0x3A, 0x5F), Color.FromRgb(0xDB, 0xE9, 0xFF), available("hibernateAfter") && hasBattery);
         int Shown(string key) => Catalog.AsTime(Value(profile, key, side) ?? Fallback(profile, key, side)) ?? 0;
-        var timeline = new IdleTimeline(stages, stages.ToDictionary(stage => stage.Key, stage => Shown(stage.Key)), Shown("lockAfter"), Value(profile, "dimmedBrightness", side) ?? Fallback(profile, "dimmedBrightness", side) ?? 30) { Margin = new Thickness(0, 4, 0, 0) };
+        // Windows refused "Sign in after waking: Not needed" (it wants admin rights), so it still asks for a password when the PC sleeps; on modern standby that's when the screen goes off (Mat 18 Nov)
+        var windowsLocksAt = App.Engine.NotSupported.Contains("signInOnWake") && PowerApi.ActiveScheme() is { } activePlan && Reader.ReadPlan(activePlan, Catalog.Find("signInOnWake")!, side) == 1 ? PowerApi.ModernStandby() ? "screenOff" : "sleepAfter" : "";
+        var timeline = new IdleTimeline(stages, stages.ToDictionary(stage => stage.Key, stage => Shown(stage.Key)), Shown("lockAfter"), Value(profile, "dimmedBrightness", side) ?? Fallback(profile, "dimmedBrightness", side) ?? 30) { Margin = new Thickness(0, 4, 0, 0), WindowsLocksAt = windowsLocksAt };
         timeline.Committed += () =>
         {
             foreach (var stage in stages) SetValue(profile, stage.Key, side, timeline.SecondsOf(stage.Key));
@@ -118,6 +121,11 @@ public partial class SettingsWindow
         var panel = new StackPanel();
         panel.Children.Add(Text("Drag the edges to change times. Drag a stage off the line to stop using it.", 12.5, false, quietBrush, new Thickness(0, -6, 0, 6)));
         panel.Children.Add(timeline);
+        if (windowsLocksAt != "") panel.Children.Add(new WrapPanel { Margin = new Thickness(0, 4, 0, 0), Children =
+        {
+            Text(HelperClient.Installed ? "Windows won't let WinSwitch change this here. In Windows, set \"If you've been away\" to Never:" : "Windows only lets WinSwitch change this with the helper (one admin prompt).", 12.5, false, quietBrush, new Thickness(0, 3, 8, 4)),
+            HelperClient.Installed ? Button("Open Sign-in options", () => Process.Start(new ProcessStartInfo("ms-settings:signinoptions") { UseShellExecute = true })) : Button("Install the helper", async () => { if (await HelperClient.InstallAsync()) await App.Engine.EvaluateAsync(true); FillProfiles(); }, primary: true),
+        } });
         return panel;
     }
 

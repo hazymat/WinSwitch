@@ -113,6 +113,14 @@ public static class Writer
         return ok;
     }
 
+    // Sign in after waking (CONSOLELOCK): Windows refuses it from an app without admin rights, so it goes through the helper when that's installed (Mat 18 Nov)
+    public static async Task<bool> WritePlanAsync(Guid plan, SettingDef setting, SidePair pair)
+    {
+        if (WritePlan(plan, setting, pair)) return true;
+        if (setting.Key != "signInOnWake" || !HelperClient.Installed) return false;
+        return await HelperClient.DoAsync("sign-in-on-wake", new { plan = plan.ToString(), ac = pair.Ac ?? -1, dc = pair.Dc ?? -1 }) && (pair.Ac == null || PowerApi.Read(plan, setting.Subgroup, setting.Setting, true) == (uint)pair.Ac) && (pair.Dc == null || PowerApi.Read(plan, setting.Subgroup, setting.Setting, false) == (uint)pair.Dc);
+    }
+
     // Settings outside the plan take the value for the power source in use now
     public static async Task<bool> WriteDirect(SettingDef setting, SidePair pair, bool pluggedIn)
     {
@@ -147,7 +155,7 @@ public static class Restorer
             var original = snapshot.Values[setting.Key];
             try
             {
-                if (setting.Kind == SettingKind.Plan) { if (settings.Power.WritesToOriginal && planExists) Writer.WritePlan(originalPlan, setting, original); }
+                if (setting.Kind == SettingKind.Plan) { if (settings.Power.WritesToOriginal && planExists) Task.Run(() => Writer.WritePlanAsync(originalPlan, setting, original)).Wait(TimeSpan.FromSeconds(5)); }
                 else Writer.WriteDirect(setting, original, pluggedIn).Wait(TimeSpan.FromSeconds(5));
             }
             catch { }

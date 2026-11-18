@@ -573,7 +573,7 @@ public partial class SettingsWindow : Window
     {
         foreach (var profile in Settings.Profiles.Where(profile => !profile.IsStarting).Concat(Settings.Tweaks)) { profile.Values.Remove(setting.Key); if (Catalog.SpeedPresets.ContainsKey(setting.Key)) { profile.SpeedAc = null; profile.SpeedDc = null; } }
         Settings.Power.LastWritten.Remove(setting.Key);
-        if (setting.Kind == SettingKind.Plan && Guid.TryParse(Settings.Power.OwnPlan, out var plan)) { Writer.WritePlan(plan, setting, original); PowerApi.SetActiveScheme(plan); }
+        if (setting.Kind == SettingKind.Plan && Guid.TryParse(Settings.Power.OwnPlan, out var plan)) { await Writer.WritePlanAsync(plan, setting, original); PowerApi.SetActiveScheme(plan); }
         else await Writer.WriteDirect(setting, original, PowerApi.PowerStatus().pluggedIn);
         Changed(); FillProfiles(); await FillOriginalAsync();
     }

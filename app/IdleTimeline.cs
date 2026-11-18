@@ -14,6 +14,7 @@ public sealed class IdleTimeline : Canvas
     public record Stage(string Key, string Name, string Note, Color Fill, Color Ink);
     public event Action? Committed;
     public int DimmedBrightness { get; private set; }
+    public string WindowsLocksAt { get; init; } = ""; // the stage where Windows asks for a password anyway, when it won't take "Not needed"
     readonly List<Stage> stages;
     readonly Dictionary<string, int> slots = new(); // 0 = not used
     int lockSlot; // 0 = not used
@@ -128,8 +129,9 @@ public sealed class IdleTimeline : Canvas
         if (unused.Count == 0) spare.Children.Add(new TextBlock { Text = "nothing. Drag a stage off the line to stop using it.", Foreground = quiet, Margin = new Thickness(0, 4, 0, 0) });
         Place(spare, 0, BarTop + BarHeight + 28);
         // Whether coming back asks for a password
-        var lockText = lockSlot > 0 ? $"Coming back within {Short(Seconds(lockSlot))} never asks for your password." : "Never locks by itself.";
-        Place(new TextBlock { Text = lockText, Foreground = quiet, FontSize = 12 }, 0, BarTop + BarHeight + 60);
+        var windowsSlot = WindowsLocksAt != "" ? slots.GetValueOrDefault(WindowsLocksAt) : 0; var windowsFirst = windowsSlot > 0 && (lockSlot == 0 || windowsSlot < lockSlot);
+        var lockText = windowsFirst ? $"⚠ Windows asks for your password from {Short(Seconds(windowsSlot))} ({stages.First(stage => stage.Key == WindowsLocksAt).Name}) on this PC, before Lock." : lockSlot > 0 ? $"Coming back within {Short(Seconds(lockSlot))} never asks for your password." : "Never locks by itself.";
+        Place(new TextBlock { Text = lockText, Foreground = windowsFirst ? lockInk : quiet, FontWeight = windowsFirst ? FontWeights.SemiBold : FontWeights.Normal, FontSize = 12, TextWrapping = TextWrapping.Wrap, Width = Math.Max(100, ActualWidth) }, 0, BarTop + BarHeight + 60);
     }
 
     FrameworkElement DimChip(Color ink)
