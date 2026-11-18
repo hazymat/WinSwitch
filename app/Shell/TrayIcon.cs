@@ -83,7 +83,7 @@ public sealed class TrayIcon : IDisposable
         // Remote control, its own group: what's on, and a way into its settings
         trayMenu.Items.Add(new ToolStripSeparator());
         var remote = App.Settings.Remote;
-        var remoteParts = new List<string>(); if (remote.PhoneOn) remoteParts.Add(App.Phone.Running ? "phone page on" : "phone page has a problem"); if (remote.MqttOn) remoteParts.Add(App.Mqtt.Status.StartsWith("Connected") ? "MQTT connected" : "MQTT not connected");
+        var remoteParts = new List<string>(); if (remote.PhoneOn) remoteParts.Add(App.Phone.Running ? "phone page on" : App.Phone.OffOnThisNetwork ? "phone page off on this network" : "phone page has a problem"); if (remote.MqttOn) remoteParts.Add(App.Mqtt.Status.StartsWith("Connected") ? "MQTT connected" : "MQTT not connected");
         trayMenu.Items.Add(new ToolStripMenuItem("Remote control: " + (remoteParts.Count == 0 ? "off" : string.Join(", ", remoteParts)), null, (sender, args) => App.OpenSettings("Phone")));
         var awake = new ToolStripMenuItem(PowerActions.Awake ? AwakeLabel() : "Keep awake");
         if (PowerActions.Awake) awake.DropDownItems.Add("Stop keeping awake", null, (sender, args) => PowerActions.StopKeepingAwake());

@@ -114,6 +114,8 @@ public class RemoteSettings
     public string MqttTopic { get; set; } = "winswitch";
     public bool HomeAssistantDiscovery { get; set; } = true;
     public List<string> Blocked { get; set; } = new(); // actions turned off in Allowed actions
+    public bool OnlyOnNetworks { get; set; } // the phone page only listens on the networks below (home), never in a café
+    public Dictionary<string, string> Networks { get; set; } = new(); // network thing (router hardware address) -> name
 }
 
 public class TweakOverride { public bool On { get; set; } public bool ScheduledWhenSet { get; set; } }

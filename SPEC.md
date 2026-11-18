@@ -301,6 +301,7 @@ Off by default. Settings › Remote has two cards. Both offer the same actions, 
 **Security:**
 - Only answers devices on the local network (private addresses); refused from anywhere else, even if a router forwards the port.
 - A long random token, in the QR code and never shown in full; **New token** unpairs every phone. Wrong tokens are slowed down and logged.
+- **Only on these networks** (Mat 18 Nov): tick it and the phone page only listens on the networks listed (the one you're on is added as "Home"; networks are recognised by the router's hardware address, names editable). Anywhere else it stops listening at all, and the tray says "phone page off on this network".
 - Plain HTTP on the home network (iPhones refuse self-signed HTTPS without a profile install, which is worse). From outside the house use a VPN such as Tailscale; WinSwitch never opens itself to the internet.
 - Windows Firewall rule added for the private network profile only, removed on uninstall.
 - Logs every remote command to `logs\remote.log` (who, what, when).

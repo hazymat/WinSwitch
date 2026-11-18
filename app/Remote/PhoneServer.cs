@@ -15,12 +15,24 @@ public sealed class PhoneServer
     readonly Dictionary<string, (int failures, DateTime since)> failuresByAddress = new();
     public int Port { get; private set; }
     public string Problem { get; private set; } = "";
+    // The network we're on, and whether the phone page is off here because it's not one of the allowed networks (Mat 18 Nov)
+    public (string thing, string name) Network { get; private set; } = Rules.Inventory.CurrentNetwork();
+    public bool OffOnThisNetwork => App.Settings.Remote.OnlyOnNetworks && !App.Settings.Remote.Networks.ContainsKey(Network.thing);
+    public event Action? Changed;
+    readonly System.Windows.Threading.DispatcherTimer networkTimer = new() { Interval = TimeSpan.FromSeconds(3) }; // networks connect in stages
+
+    public PhoneServer()
+    {
+        networkTimer.Tick += async (sender, args) => { networkTimer.Stop(); Network = await Task.Run(Rules.Inventory.CurrentNetwork); Apply(); Changed?.Invoke(); };
+        System.Net.NetworkInformation.NetworkChange.NetworkAddressChanged += (sender, args) => App.Dispatcher.BeginInvoke(() => { networkTimer.Stop(); networkTimer.Start(); });
+    }
     public bool Running => listener != null;
 
     public void Apply()
     {
         var remote = App.Settings.Remote;
         if (!remote.PhoneOn) { Stop(); return; }
+        if (OffOnThisNetwork) { if (Running) RemoteControl.Log("phone", "network", $"off: {(Network.name == "" ? "no network" : Network.name)} isn't an allowed network"); Stop(); return; }
         if (Running && Port == remote.PhonePort) return;
         Stop();
         try

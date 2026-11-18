@@ -26,8 +26,8 @@ public partial class SettingsWindow : Window
         WireGeneralTab(); WireAboutTab(); WireRemoteTabs(); WireHelperTab();
         FillProfiles(); FillTweaks(); FillSituations(); _ = FillOriginalAsync();
         KeyDown += (sender, keyArgs) => { if (keyArgs.Key == Key.Escape && !keyArgs.Handled && keyArgs.OriginalSource is not TextBox) { keyArgs.Handled = true; Close(); } };
-        App.SettingsChanged += OnOutsideChange; App.Engine.Changed += OnEngineChanged;
-        Closed += (sender, args) => { App.SettingsChanged -= OnOutsideChange; App.Engine.Changed -= OnEngineChanged; App.Engine.ThingsAppeared -= OnThingsAppeared; };
+        App.SettingsChanged += OnOutsideChange; App.Engine.Changed += OnEngineChanged; App.Phone.Changed += OnPhoneNetworkChanged;
+        Closed += (sender, args) => { App.SettingsChanged -= OnOutsideChange; App.Engine.Changed -= OnEngineChanged; App.Phone.Changed -= OnPhoneNetworkChanged; App.Engine.ThingsAppeared -= OnThingsAppeared; };
         settingsTabs.SelectionChanged += (sender, args) => { if (args.Source == settingsTabs && settingsTabs.SelectedItem == originalTab) _ = FillOriginalAsync(); };
     }
     // Never rebuilt under an open drop-down or a box being typed in: it waits until you've finished
