@@ -69,7 +69,7 @@ When the helper is installed, it owns remote control and profile switching (so a
 
 Left-click opens the profile menu, right-click the full menu:
 
-- Shaded version row (as the siblings), plus **Restart to update to x.y.z** in bold when an update is downloaded (there is no window to put the update bar in, so it lives here and in Settings › About, and the icon gets a small dot).
+- Shaded version row (as the siblings), plus **Update WinSwitch to x.y.z** (never "Restart", which reads as restarting Windows; Mat 18 Nov) in bold when an update is downloaded (there is no window to put the update bar in, so it lives here and in Settings › About, and the icon gets a small dot).
 - **Automatic** (ticked when the situation rules are choosing) with what it matched underneath in grey ("Desk dock, plugged in").
 - The profiles, one per row with their colour dot; the active one ticked. Picking one by hand holds until the next situation change (plug or unplug something), then Automatic takes over again.
 - **Keep awake** ▸ 30 min, 1 hour, 2 hours, Until I turn it off (stops sleep and screen off; the icon shows a small cup).

@@ -641,7 +641,7 @@ public partial class SettingsWindow : Window
     {
         updateStatusText.Text = App.Updater.StatusText;
         restartToUpdateButton.Visibility = App.Updater.ReadyVersion == "" ? Visibility.Collapsed : Visibility.Visible;
-        restartToUpdateButton.Content = $"Restart to update to {App.Updater.ReadyVersion}";
+        restartToUpdateButton.Content = $"Update WinSwitch to {App.Updater.ReadyVersion}";
     });
 
     // Version, Windows, power state and what's connected (names only), plus the end of the crash log
