@@ -50,11 +50,15 @@ public partial class SettingsWindow
                 controls.Children.Add(SetItRow(profile, "brightness", side, "", "Brightness", "Set the brightness", Enumerable.Range(0, 21).Select(step => step * 5).ToArray(), value => $"{value}%", (current ?? Direct.Brightness() ?? 80) / 5 * 5, moving => dim.Opacity = DimFor(moving)));
             }
             else dim.Opacity = 0;
-            if (Available("screenOff")) controls.Children.Add(StopsRow(profile, "screenOff", side, "", "Screen off after", new[] { 60, 120, 180, 300, 600, 900, 1800, 3600, 0 }, ShortTime));
             if (Available("refresh") && Direct.RefreshRates() is { Count: > 1 } rates) controls.Children.Add(ChipsRow(profile, "refresh", side, "Refresh rate", rates.Select(hertz => (hertz, $"{hertz} Hz" + (hertz == rates[0] ? ": longer battery" : hertz == rates[^1] ? ": smoother" : ""))).ToArray()));
             var row = new DockPanel { Children = { preview, controls } }; DockPanel.SetDock(preview, Dock.Left);
             body.Children.Add(row);
-            AddMore(body, profile, Catalog.Screen, new[] { "brightness", "screenOff", "refresh" });
+            AddMore(body, profile, Catalog.Screen, new[] { "brightness", "screenOff", "refresh", "dimAfter", "dimmedBrightness", "blankAfter", "lockAfter" });
+        }
+        // ---- When I step away ----
+        {
+            var body = DialCard(page, "\uE916", "When I step away", profile);
+            body.Children.Add(StepAway(profile, side, Available, hasBattery));
         }
         // ---- Sleep and lid ----
         {
@@ -64,9 +68,7 @@ public partial class SettingsWindow
                 body.Children.Add(Text("When I close the lid", 12.5, false, null, new Thickness(0, 0, 0, 6)));
                 body.Children.Add(Tiles(profile, "lid", side, new[] { (0, "", "Keep running", "Segoe MDL2 Assets"), (1, "", "Sleep", "Segoe MDL2 Assets"), (2, "❄", "Hibernate", "Segoe UI Symbol"), (3, "", "Shut down", "Segoe MDL2 Assets") }));
             }
-            if (Available("sleepAfter")) body.Children.Add(StopsRow(profile, "sleepAfter", side, "", "Sleep when idle for", new[] { 120, 300, 600, 900, 1800, 3600, 7200, 0 }, ShortTime));
-            if (Available("hibernateAfter") && hasBattery) body.Children.Add(StopsRow(profile, "hibernateAfter", side, "❄", "Then hibernate after", new[] { 1800, 3600, 7200, 10800, 0 }, ShortTime));
-            AddMore(body, profile, Catalog.Sleep, new[] { "lid", "sleepAfter", "hibernateAfter" });
+            AddMore(body, profile, Catalog.Sleep, new[] { "lid", "sleepAfter", "hibernateAfter", "signInOnWake" });
         }
         // ---- Battery or speed ----
         {
@@ -93,6 +95,30 @@ public partial class SettingsWindow
             body.Children.Add(SetItRow(profile, "volume", side, "", "Volume", "Set the volume", Enumerable.Range(0, 21).Select(step => step * 5).ToArray(), value => $"{value}%", (Value(profile, "volume", side) ?? Direct.Volume() ?? 30) / 5 * 5, null));
             body.Children.Add(OutputRow(profile));
         }
+    }
+
+    // The step-away line for the side shown: Windows' own timers plus WinSwitch's Blank and Lock. Any change writes the whole line for this side
+    FrameworkElement StepAway(Profile profile, bool side, Func<string, bool> available, bool hasBattery)
+    {
+        var stages = new List<IdleTimeline.Stage>();
+        void Stage(string key, string name, string note, Color fill, Color ink, bool show) { if (show) stages.Add(new IdleTimeline.Stage(key, name, note, fill, ink)); }
+        Stage("dimAfter", "Dim", "", Color.FromRgb(0xF4, 0xC4, 0x6A), Color.FromRgb(0x4A, 0x33, 0x00), available("dimAfter"));
+        Stage("blankAfter", "Blank", "black, instant back", Color.FromRgb(0x2B, 0x2F, 0x36), Color.FromRgb(0xE9, 0xEC, 0xF0), true);
+        Stage("screenOff", "Screen off", "back in a second", Color.FromRgb(0x0B, 0x0C, 0x0E), Color.FromRgb(0xC9, 0xCE, 0xD6), available("screenOff"));
+        Stage("sleepAfter", "Sleep", "back in a few seconds", Color.FromRgb(0x3B, 0x3F, 0x8F), Color.FromRgb(0xE6, 0xE8, 0xFF), available("sleepAfter"));
+        Stage("hibernateAfter", "Hibernate", "uses no battery", Color.FromRgb(0x1E, 0x3A, 0x5F), Color.FromRgb(0xDB, 0xE9, 0xFF), available("hibernateAfter") && hasBattery);
+        int Shown(string key) => Catalog.AsTime(Value(profile, key, side) ?? Fallback(profile, key, side)) ?? 0;
+        var timeline = new IdleTimeline(stages, stages.ToDictionary(stage => stage.Key, stage => Shown(stage.Key)), Shown("lockAfter"), Value(profile, "dimmedBrightness", side) ?? Fallback(profile, "dimmedBrightness", side) ?? 30) { Margin = new Thickness(0, 4, 0, 0) };
+        timeline.Committed += () =>
+        {
+            foreach (var stage in stages) SetValue(profile, stage.Key, side, timeline.SecondsOf(stage.Key));
+            SetValue(profile, "lockAfter", side, timeline.SecondsOf("lock"));
+            if (available("dimmedBrightness")) SetValue(profile, "dimmedBrightness", side, timeline.DimmedBrightness);
+        };
+        var panel = new StackPanel();
+        panel.Children.Add(Text("Drag the edges to change times. Drag a stage off the line to stop using it.", 12.5, false, quietBrush, new Thickness(0, -6, 0, 6)));
+        panel.Children.Add(timeline);
+        return panel;
     }
 
     // Sound output: a tick, then the outputs plugged in now (plus the chosen one if it isn't); one choice for both power sources
