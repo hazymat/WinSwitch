@@ -117,7 +117,7 @@ public class RemoteSettings
     public bool HomeAssistantDiscovery { get; set; } = true;
     public List<string> Blocked { get; set; } = new(); // actions turned off in Allowed actions
     public bool OnlyOnNetworks { get; set; } // the phone page only listens on the networks below (home), never in a café
-    public Dictionary<string, string> Networks { get; set; } = new(); // network thing (router hardware address) -> name
+    public Dictionary<string, string> Networks { get; set; } = new(); // "wifi:<name>" -> name, or a wired network by its router ("network:<hardware address>") -> name
 }
 
 public class TweakOverride { public bool On { get; set; } public bool ScheduledWhenSet { get; set; } }
