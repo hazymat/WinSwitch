@@ -3,11 +3,12 @@ using System.Drawing.Drawing2D;
 namespace WinSwitch.Shell;
 
 // The tray icon: a bold upright line-art battery filling the square tray slot (Mat 18 Nov, option D, then B: wider and on whole pixels so it's as crisp as Windows' own).
-// Fill = charge (green while charging, red at 20% or less), a bolt beside it while plugged in (breathing while charging, see TrayIcon; still and faint when plugged in but not charging), and one dot under the bolt:
+// Fill = charge (while charging: green to light blue with a light rising through it; red at 20% or less), a bolt beside it while plugged in (breathing while charging, see TrayIcon; still (full strength) when plugged in but not charging), and one dot under the bolt:
 // the profile's colour, amber when a question waits, flashing blue when an update is ready. White on a dark taskbar, black on a light one, transparent behind
 public static class BatteryIcon
 {
-    public static Bitmap Draw(int size, double level, bool pluggedIn, bool charging, string dotColour, bool light, double boltStrength = 1)
+    static Color Mix(Color from, Color to, double amount) => Color.FromArgb((int)Math.Round(from.R + (to.R - from.R) * amount), (int)Math.Round(from.G + (to.G - from.G) * amount), (int)Math.Round(from.B + (to.B - from.B) * amount));
+    public static Bitmap Draw(int size, double level, bool pluggedIn, bool charging, string dotColour, bool light, double boltStrength = 1, double sweep = 0)
     {
         var ink = light ? Color.Black : Color.White;
         var bitmap = new Bitmap(size, size, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
@@ -27,8 +28,19 @@ public static class BatteryIcon
             if (level > 0)
             {
                 var rows = Math.Max(1, (int)Math.Round((innerBottom - innerTop + 1) * Math.Min(1, level)));
-                var fillColour = charging ? (light ? Color.FromArgb(40, 150, 60) : Color.FromArgb(160, 225, 160)) : level <= 0.2 ? Color.FromArgb(232, 72, 72) : ink;
-                using var fillBrush = new SolidBrush(fillColour); graphics.FillRectangle(fillBrush, innerLeft, innerBottom - rows + 1, innerRight - innerLeft + 1, rows);
+                if (charging)
+                {
+                    // Charging (Mat 18 Nov, mockup charging-fill-mockup.gif): green at the bottom of the fill to light blue at its top, and a light rising through it once a breath (sweep 0..1)
+                    var bottomColour = light ? Color.FromArgb(30, 170, 80) : Color.FromArgb(60, 215, 110); var topColour = light ? Color.FromArgb(0, 150, 190) : Color.FromArgb(90, 230, 255);
+                    var band = innerBottom + 2 - (rows + 4) * sweep;
+                    for (var row = 0; row < rows; row++)
+                    {
+                        var rowY = innerBottom - row; var glow = Math.Max(0, 1 - Math.Abs(rowY - band) / 1.6);
+                        var rowColour = Mix(Mix(bottomColour, topColour, row / (double)Math.Max(1, rows - 1)), Color.White, 0.75 * glow);
+                        using var rowBrush = new SolidBrush(rowColour); graphics.FillRectangle(rowBrush, innerLeft, rowY, innerRight - innerLeft + 1, 1);
+                    }
+                }
+                else { using var fillBrush = new SolidBrush(level <= 0.2 ? Color.FromArgb(232, 72, 72) : ink); graphics.FillRectangle(fillBrush, innerLeft, innerBottom - rows + 1, innerRight - innerLeft + 1, rows); }
             }
             // Bolt and dot in the column to the right: drawn smooth at 8x and scaled down
             var column = right + 1 + Math.Max(1, (int)Math.Round(size / 20.0)); var columnWidth = size - column; var columnMiddle = column + columnWidth / 2f;
