@@ -125,8 +125,8 @@ public sealed class AppUpdater
             SetStatus($"Downloading {foundUpdate.TargetFullRelease.Version}…");
             await updateManager.DownloadUpdatesAsync(foundUpdate);
             readyManager = updateManager; readyUpdate = foundUpdate;
-            SetStatus($"WinSwitch {ReadyVersion} is downloaded and ready. Restart to update.");
-            App.Notices.Info($"WinSwitch {ReadyVersion} is ready", "Restart to update, here or from the tray menu.", () => _ = RestartToUpdateAsync(), "Restart", always: true);
+            SetStatus($"WinSwitch {ReadyVersion} is downloaded and ready.");
+            App.Notices.Info($"WinSwitch {ReadyVersion} is ready", "Update now, or later from the tray menu.", () => _ = RestartToUpdateAsync(), "Update WinSwitch now", always: true);
         }
     }
 
@@ -184,8 +184,8 @@ public sealed class AppUpdater
         SetStatus($"Downloading {newestVersion}…");
         portableStagedPath = await DownloadPortableAsync(newestTag);
         portableReadyVersion = newestVersion;
-        SetStatus($"WinSwitch {ReadyVersion} is downloaded and ready. Restart to update.");
-        App.Notices.Info($"WinSwitch {ReadyVersion} is ready", "Restart to update, here or from the tray menu.", () => _ = RestartToUpdateAsync(), "Restart", always: true);
+        SetStatus($"WinSwitch {ReadyVersion} is downloaded and ready.");
+        App.Notices.Info($"WinSwitch {ReadyVersion} is ready", "Update now, or later from the tray menu.", () => _ = RestartToUpdateAsync(), "Update WinSwitch now", always: true);
     }
 
     static async Task<string> DownloadPortableAsync(string releaseTag)

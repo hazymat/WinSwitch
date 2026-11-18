@@ -56,7 +56,7 @@ public sealed class TrayIcon : IDisposable
         trayMenu.Items.Add(new ToolStripMenuItem(App.Updater.CurrentVersion) { Enabled = false, BackColor = Color.FromArgb(236, 236, 236), Tag = "small" });
         // The same dots as the tray icon, so a flashing blue or amber dot leads to its explanation (Mat 18 Nov)
         updateItem = null;
-        if (App.Updater.ReadyVersion != "") { updateItem = Bold($"Restart to update to {App.Updater.ReadyVersion}", async () => await App.Updater.RestartToUpdateAsync()); updateItem.Image = blueDot; trayMenu.Items.Add(updateItem); }
+        if (App.Updater.ReadyVersion != "") { updateItem = Bold($"Update WinSwitch to {App.Updater.ReadyVersion}", async () => await App.Updater.RestartToUpdateAsync()); updateItem.Image = blueDot; trayMenu.Items.Add(updateItem); }
         if (App.Notices.Unanswered.Count > 0) { var questionItem = Bold(App.Notices.Unanswered.Count == 1 ? "1 question waiting" : $"{App.Notices.Unanswered.Count} questions waiting", App.Notices.ShowUnanswered); questionItem.Image = amberDot; trayMenu.Items.Add(questionItem); }
         if (settings.Power.Paused)
         {
@@ -136,7 +136,7 @@ public sealed class TrayIcon : IDisposable
     void ShowUpdateCard()
     {
         seenUpdate = App.Updater.ReadyVersion; Refresh();
-        App.Notices.Info("Update ready", $"WinSwitch {App.Updater.ReadyVersion} is downloaded. The blue dot stays until you restart.", () => _ = App.Updater.RestartToUpdateAsync(), "Restart now", always: true);
+        App.Notices.Info("Update ready", $"WinSwitch {App.Updater.ReadyVersion} is downloaded. The blue dot stays until you update.", () => _ = App.Updater.RestartToUpdateAsync(), "Update WinSwitch now", always: true);
     }
 
     // The size the taskbar shows tray icons at, from the taskbar's own scaling. SystemInformation.SmallIconSize is fixed at the scaling Windows had at sign-in, so after a dock change or restart the icon was drawn too small and blown up (fuzzy)
