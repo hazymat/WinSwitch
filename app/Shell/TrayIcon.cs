@@ -9,7 +9,9 @@ public sealed class TrayIcon : IDisposable
     readonly NotifyIcon notifyIcon;
     readonly ContextMenuStrip trayMenu = new();
     string iconKey = "";
-    IntPtr iconHandle;
+    readonly Dictionary<int, IntPtr> iconFrames = new(); // pulse step -> icon
+    Func<int, Bitmap>? drawIcon; IntPtr shownHandle;
+    readonly System.Windows.Forms.Timer pulseTimer = new() { Interval = 125 }; int pulseStep;
     readonly System.Windows.Forms.Timer flashTimer = new() { Interval = 900 }; // update waiting: the icon until seen, the menu row whenever the menu is open
     bool menuOpen;
     bool flashOn = true;
@@ -42,6 +44,7 @@ public sealed class TrayIcon : IDisposable
         trayMenu.Closed += (sender, args) => { menuOpen = false; if (updateItem != null) seenUpdate = App.Updater.ReadyVersion; Refresh(); }; // seen in the menu: the tray dot stops flashing
         App.Engine.Changed += Refresh; App.Notices.Changed += Refresh; App.Updater.Changed += Refresh; PowerActions.AwakeChanged += Refresh;
         batteryTimer.Tick += (sender, args) => Refresh(); batteryTimer.Start();
+        pulseTimer.Tick += (sender, args) => { pulseStep = (pulseStep + 1) % PulseSteps; ShowIcon(); };
         flashTimer.Tick += (sender, args) => { flashOn = !flashOn; flashTimer.Interval = flashOn ? 900 : 500; if (menuOpen && updateItem != null) { updateItem.Image = flashOn ? blueDot : noDot; updateItem.Invalidate(); } Refresh(); };
         Microsoft.Win32.SystemEvents.UserPreferenceChanged += (sender, args) => Refresh(); // light or dark taskbar
         Microsoft.Win32.SystemEvents.DisplaySettingsChanged += (sender, args) => Refresh(); // taskbar scaling
@@ -124,14 +127,23 @@ public sealed class TrayIcon : IDisposable
         if (flashing != flashTimer.Enabled) { flashOn = true; if (flashing) flashTimer.Start(); else flashTimer.Stop(); }
         var dot = question ? "#E0912F" : updateWaiting ? (!updateUnseen || flashOn ? "#4CC2FF" : "") : colour;
         var level = hasBattery ? Math.Clamp(percent, 0, 100) / 5 * 5 : 100; var charging = hasBattery && pluggedIn && percent < 100;
+        if (charging != pulseTimer.Enabled) { pulseStep = 0; if (charging) pulseTimer.Start(); else pulseTimer.Stop(); } // the bolt breathes while charging (plugged in, so no battery cost)
         var key = $"{dot}|{light}|{size}|{level}|{charging}";
-        if (key == iconKey) return;
-        iconKey = key;
-        var previousHandle = iconHandle;
-        using (var bitmap = BatteryIcon.Draw(size, level / 100.0, charging, dot, light)) iconHandle = bitmap.GetHicon();
-        notifyIcon.Icon = Icon.FromHandle(iconHandle);
-        if (previousHandle != IntPtr.Zero) DestroyIcon(previousHandle);
+        if (key != iconKey) { iconKey = key; foreach (var handle in iconFrames.Values) DestroyIcon(handle); iconFrames.Clear(); drawIcon = step => BatteryIcon.Draw(size, level / 100.0, charging, dot, light, PulseStrength(step)); }
+        ShowIcon();
     });
+
+    // Frames are drawn once per state and reused, so the pulse only swaps icons
+    void ShowIcon()
+    {
+        if (drawIcon == null) return;
+        var step = pulseTimer.Enabled ? pulseStep : 0;
+        if (!iconFrames.TryGetValue(step, out var handle)) { using var bitmap = drawIcon(step); iconFrames[step] = handle = bitmap.GetHicon(); }
+        if (handle == shownHandle) return;
+        shownHandle = handle; notifyIcon.Icon = Icon.FromHandle(handle);
+    }
+    const int PulseSteps = 16; // 2 s a breath at 8 frames a second
+    static double PulseStrength(int step) => 0.3 + 0.7 * (0.5 + 0.5 * Math.Cos(2 * Math.PI * step / PulseSteps));
 
     void ShowUpdateCard()
     {
