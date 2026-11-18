@@ -3,11 +3,11 @@ using System.Drawing.Drawing2D;
 namespace WinSwitch.Shell;
 
 // The tray icon: a bold upright line-art battery filling the square tray slot (Mat 18 Nov, option D, then B: wider and on whole pixels so it's as crisp as Windows' own).
-// Fill = charge (green while charging, red at 20% or less), a bolt beside it while charging (breathing, see TrayIcon), and one dot under the bolt:
+// Fill = charge (green while charging, red at 20% or less), a bolt beside it while plugged in (breathing while charging, see TrayIcon; still and faint when plugged in but not charging), and one dot under the bolt:
 // the profile's colour, amber when a question waits, flashing blue when an update is ready. White on a dark taskbar, black on a light one, transparent behind
 public static class BatteryIcon
 {
-    public static Bitmap Draw(int size, double level, bool charging, string dotColour, bool light, double boltStrength = 1)
+    public static Bitmap Draw(int size, double level, bool pluggedIn, bool charging, string dotColour, bool light, double boltStrength = 1)
     {
         var ink = light ? Color.Black : Color.White;
         var bitmap = new Bitmap(size, size, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
@@ -37,7 +37,7 @@ public static class BatteryIcon
             using (var smoothGraphics = Graphics.FromImage(smooth))
             {
                 smoothGraphics.SmoothingMode = SmoothingMode.AntiAlias; smoothGraphics.Clear(Color.Transparent);
-                if (charging)
+                if (pluggedIn)
                 {
                     float width = columnWidth * 0.95f * Super, height = size * 0.52f * Super, boltX = columnMiddle * Super - width / 2, boltY = size * 0.27f * Super - height / 2;
                     using var bolt = new GraphicsPath();

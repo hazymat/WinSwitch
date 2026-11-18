@@ -109,31 +109,32 @@ public sealed class TrayIcon : IDisposable
 
     static ToolStripMenuItem Bold(string text, Action action) => new(text, null, (sender, args) => action()) { Tag = "bold" };
     // "24% charging, 7 hr 23 min until full" / "62% on battery, 3 hr 10 min left", like Windows' own battery tooltip. The time is left out while Windows has no charge rate yet
-    static string BatteryLine(bool pluggedIn, int percent)
+    static string BatteryLine(bool pluggedIn, int percent, bool charging, Windows.Devices.Power.BatteryReport? report)
     {
-        var line = $"{percent}% " + (!pluggedIn ? "on battery" : percent >= 100 ? "plugged in, fully charged" : "charging");
-        try
-        {
-            var report = Windows.Devices.Power.Battery.AggregateBattery.GetReport();
-            double rate = report.ChargeRateInMilliwatts ?? 0, remaining = report.RemainingCapacityInMilliwattHours ?? 0, full = report.FullChargeCapacityInMilliwattHours ?? 0;
-            var hours = pluggedIn && percent < 100 && rate > 0 && full > remaining ? (full - remaining) / rate : !pluggedIn && rate < 0 && remaining > 0 ? remaining / -rate : 0;
-            if (hours > 0 && hours < 48) line += $", {Duration(TimeSpan.FromHours(hours))} " + (pluggedIn ? "until full" : "left");
-            else if (pluggedIn && percent < 100 && rate <= 0) line = $"{percent}% plugged in, not charging";
-        }
-        catch { }
+        if (pluggedIn && !charging) return $"{percent}% plugged in, " + (percent >= 100 ? "fully charged" : "not charging");
+        var line = $"{percent}% " + (pluggedIn ? "charging" : "on battery");
+        if (report == null) return line;
+        double rate = report.ChargeRateInMilliwatts ?? 0, remaining = report.RemainingCapacityInMilliwattHours ?? 0, full = report.FullChargeCapacityInMilliwattHours ?? 0;
+        var hours = pluggedIn && rate > 0 && full > remaining ? (full - remaining) / rate : !pluggedIn && rate < 0 && remaining > 0 ? remaining / -rate : 0;
+        if (hours > 0 && hours < 48) line += $", {Duration(TimeSpan.FromHours(hours))} " + (pluggedIn ? "until full" : "left");
         return line;
     }
+    static Windows.Devices.Power.BatteryReport? BatteryReport() { try { return Windows.Devices.Power.Battery.AggregateBattery.GetReport(); } catch { return null; } }
     static string Duration(TimeSpan time) => time.TotalMinutes < 60 ? $"{Math.Max(1, (int)time.TotalMinutes)} min" : $"{(int)time.TotalHours} hr {time.Minutes} min";
 
     static string AwakeLabel() => PowerActions.AwakeUntil == DateTime.MaxValue ? "Keeping awake" : $"Keeping awake until {PowerActions.AwakeUntil:HH:mm}";
     static bool Confirm(string question) => System.Windows.MessageBox.Show(question, "WinSwitch", System.Windows.MessageBoxButton.OKCancel, System.Windows.MessageBoxImage.Question) == System.Windows.MessageBoxResult.OK;
 
     // Hover text, and the battery icon with the profile's colour dot
+    bool plugged;
     void Refresh() => App.Dispatcher.BeginInvoke(() =>
     {
         var engine = App.Engine; var (pluggedIn, percent, hasBattery) = PowerApi.PowerStatus();
+        // Charging only when Windows says so: plugged in but held (charge limit, weak charger, full) shows a still, faint bolt instead (Mat 18 Nov)
+        var report = hasBattery ? BatteryReport() : null; plugged = hasBattery && pluggedIn;
+        var charging = plugged && percent < 100 && (report == null ? true : report.Status == Windows.System.Power.BatteryStatus.Charging);
         var state = App.Settings.Power.Paused ? "paused" : engine.ActiveProfile?.Name ?? "starting";
-        var text = $"WinSwitch\nProfile: {state}" + (hasBattery ? "\n" + BatteryLine(pluggedIn, percent) : "") + (PowerActions.Awake ? "\n" + AwakeLabel() : "");
+        var text = $"WinSwitch\nProfile: {state}" + (hasBattery ? "\n" + BatteryLine(pluggedIn, percent, charging, report) : "") + (PowerActions.Awake ? "\n" + AwakeLabel() : "");
         notifyIcon.Text = text.Length > 127 ? text[..127] : text;
         var colour = App.Settings.Power.Paused ? "" : engine.ActiveProfile?.Colour ?? "";
         var question = App.Notices.Unanswered.Count > 0; var light = TaskbarIsLight(); var size = TrayIconSize();
@@ -142,10 +143,10 @@ public sealed class TrayIcon : IDisposable
         var flashing = updateUnseen || menuOpen && updateItem != null;
         if (flashing != flashTimer.Enabled) { flashOn = true; if (flashing) flashTimer.Start(); else flashTimer.Stop(); }
         var dot = question ? "#E0912F" : updateWaiting ? (!updateUnseen || flashOn ? "#4CC2FF" : "") : colour;
-        var level = hasBattery ? Math.Clamp(percent, 0, 100) / 5 * 5 : 100; var charging = hasBattery && pluggedIn && percent < 100;
+        var level = hasBattery ? Math.Clamp(percent, 0, 100) / 5 * 5 : 100;
         if (charging != pulseTimer.Enabled) { pulseStep = 0; if (charging) pulseTimer.Start(); else pulseTimer.Stop(); } // the bolt breathes while charging (plugged in, so no battery cost)
-        var key = $"{dot}|{light}|{size}|{level}|{charging}";
-        if (key != iconKey) { iconKey = key; foreach (var handle in iconFrames.Values) DestroyIcon(handle); iconFrames.Clear(); drawIcon = step => BatteryIcon.Draw(size, level / 100.0, charging, dot, light, PulseStrength(step)); }
+        var key = $"{dot}|{light}|{size}|{level}|{plugged}|{charging}";
+        if (key != iconKey) { iconKey = key; foreach (var handle in iconFrames.Values) DestroyIcon(handle); iconFrames.Clear(); drawIcon = step => BatteryIcon.Draw(size, level / 100.0, plugged, charging, dot, light, charging ? PulseStrength(step) : 0.4); }
         ShowIcon();
     });
 

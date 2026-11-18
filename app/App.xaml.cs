@@ -33,6 +33,7 @@ public partial class App : Application
         var openSignal = new EventWaitHandle(false, EventResetMode.AutoReset, instanceName + ".OpenSettings");
         if (!isFirstInstance) { openSignal.Set(); Shutdown(); return; }
         ThreadPool.RegisterWaitForSingleObject(openSignal, (state, timedOut) => Dispatcher.BeginInvoke(() => OpenSettings()), null, -1, false);
+        if (Environment.GetCommandLineArgs().Contains("--start-check")) StartCheck();
         if (AppPaths.IsPortable) AppUpdater.CleanUpAfterPortableUpdate();
         CrashReporter.Install(this);
         Settings = AppSettings.Load();
@@ -60,6 +61,16 @@ public partial class App : Application
         Phone.Apply(); _ = Mqtt.ApplyAsync(); _ = OfferHelperUpdateAsync();
         if (CrashReporter.TakeUnseenReport()) Notices.Info("WinSwitch had a problem last time", "Details are in Settings › About › Open logs (crash.log).", always: true);
         if (!Settings.General.WizardDone) { if (captureWindow?.IsVisible == true) captureWindow.Closed += (sender, args) => OpenWizard(); else OpenWizard(); }
+        startedUp = true;
+    }
+
+    // CI runs every build with --start-check before releasing it: start-up must finish and the app keep running for 30 s, else exit code 3 and no release
+    bool startedUp;
+    void StartCheck()
+    {
+        var checkTimer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(30) };
+        checkTimer.Tick += (sender, args) => { checkTimer.Stop(); if (!startedUp) CrashReporter.Write("Start check: start-up didn't finish in 30 s", null); Environment.ExitCode = startedUp ? 0 : 3; Quit(); };
+        checkTimer.Start();
     }
 
     public void NotifySettingsChanged() { SettingsChanged?.Invoke(); Engine.EvaluateSoon(); }

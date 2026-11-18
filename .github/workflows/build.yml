@@ -43,6 +43,19 @@ jobs:
           dotnet publish app/WinSwitch.csproj -c Release -o publish/portable -p:Version=$version -p:WinSwitchPortable=true -p:PublishSingleFile=true -p:IncludeAllContentForSelfExtract=true -p:EnableCompressionInSingleFile=true
           New-Item -ItemType Directory -Force downloads | Out-Null
           Copy-Item publish/portable/WinSwitch.exe downloads/WinSwitch-Portable.exe
+      - name: Start check (a build that can't start is never released)
+        shell: pwsh
+        run: |
+          # Runs the build for 30 s with its own data folder (portable.txt), then fails on a crash, a hang or start-up not finishing
+          $folder = "publish/WinSwitch"; $log = "$folder/WinSwitch-data/logs/crash.log"; New-Item "$folder/portable.txt" -Force | Out-Null
+          try {
+            $process = Start-Process "$folder/WinSwitch.exe" -ArgumentList "--start-check" -PassThru; $null = $process.Handle
+            $result = if ($process.WaitForExit(120000)) { $process.ExitCode } else { $process.Kill(); "timed out" }
+            $crashed = (Test-Path $log) -and (Select-String -Path $log -Pattern "Crash \(unhandled\)|Couldn't start|Start check" -Quiet)
+            if (Test-Path $log) { Get-Content $log }
+          } finally { Remove-Item "$folder/portable.txt", "$folder/WinSwitch-data" -Recurse -Force -ErrorAction SilentlyContinue }
+          if ("$result" -ne "0" -or $crashed) { throw "WinSwitch didn't start properly (exit: $result)" }
+          "Started and kept running"
       - uses: actions/upload-artifact@v4
         with: { name: WinSwitch-Portable, path: downloads/WinSwitch-Portable.exe }
       - name: Package and publish release
