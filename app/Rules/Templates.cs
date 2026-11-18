@@ -5,9 +5,12 @@ namespace WinSwitch.Rules;
 // Starting profile and the wizard's profiles (SPEC.md › First run)
 public static class Templates
 {
-    public static readonly string[] Colours = { "#2F7FD8", "#3FAE68", "#E0812F", "#8E6AD8", "#D2475A", "#2BA6A6", "#9AA1AB" };
+    // No orange: amber on the tray dot means a question is waiting
+    public static readonly string[] Colours = { "#2F7FD8", "#3FAE68", "#D65DB1", "#8E6AD8", "#D2475A", "#2BA6A6", "#9AA1AB" };
 
     // Everything as it was before WinSwitch, every setting filled in
+    // The first colour no other profile uses, so the tray dot tells profiles apart
+    public static string FreeColour(IEnumerable<Profile> profiles) => Colours.Where(colour => colour != "#9AA1AB").FirstOrDefault(colour => profiles.All(profile => profile.Colour != colour)) ?? Colours[profiles.Count() % Colours.Length];
     public static Profile Starting(Snapshot snapshot) => new() { Name = "Starting profile", Colour = "#9AA1AB", IsStarting = true, Values = snapshot.Values.ToDictionary(entry => entry.Key, entry => entry.Value.Clone()), SoundOutput = snapshot.SoundOutputId, SoundOutputName = snapshot.SoundOutput };
 
     public static void Set(Profile profile, string key, int? pluggedIn, int? onBattery)
