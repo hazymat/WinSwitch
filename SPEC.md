@@ -79,7 +79,7 @@ Left-click opens the profile menu, right-click the full menu:
 - **Volume** ▸ slider row and Mute (handy on servers with no keyboard volume keys).
 - Settings, Quit.
 
-The icon is the app icon with the active profile's colour as a small dot. Hover text: "WinSwitch: Desk (plugged in, 82%)".
+The icon is the app icon with the active profile's colour as a small dot. Hover text (Mat 18 Nov, like Windows' battery tooltip), one line each: "WinSwitch", "Profile: Desk", "24% charging, 7 hr 23 min until full" (or "62% on battery, 3 hr 10 min left", "plugged in, not charging", "plugged in, fully charged"; time from the battery's charge rate, left out while Windows has none), and "Keeping awake…" when on.
 
 ## Profiles
 

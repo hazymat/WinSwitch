@@ -108,6 +108,23 @@ public sealed class TrayIcon : IDisposable
     }
 
     static ToolStripMenuItem Bold(string text, Action action) => new(text, null, (sender, args) => action()) { Tag = "bold" };
+    // "24% charging, 7 hr 23 min until full" / "62% on battery, 3 hr 10 min left", like Windows' own battery tooltip. The time is left out while Windows has no charge rate yet
+    static string BatteryLine(bool pluggedIn, int percent)
+    {
+        var line = $"{percent}% " + (!pluggedIn ? "on battery" : percent >= 100 ? "plugged in, fully charged" : "charging");
+        try
+        {
+            var report = Windows.Devices.Power.Battery.AggregateBattery.GetReport();
+            double rate = report.ChargeRateInMilliwatts ?? 0, remaining = report.RemainingCapacityInMilliwattHours ?? 0, full = report.FullChargeCapacityInMilliwattHours ?? 0;
+            var hours = pluggedIn && percent < 100 && rate > 0 && full > remaining ? (full - remaining) / rate : !pluggedIn && rate < 0 && remaining > 0 ? remaining / -rate : 0;
+            if (hours > 0 && hours < 48) line += $", {Duration(TimeSpan.FromHours(hours))} " + (pluggedIn ? "until full" : "left");
+            else if (pluggedIn && percent < 100 && rate <= 0) line = $"{percent}% plugged in, not charging";
+        }
+        catch { }
+        return line;
+    }
+    static string Duration(TimeSpan time) => time.TotalMinutes < 60 ? $"{Math.Max(1, (int)time.TotalMinutes)} min" : $"{(int)time.TotalHours} hr {time.Minutes} min";
+
     static string AwakeLabel() => PowerActions.AwakeUntil == DateTime.MaxValue ? "Keeping awake" : $"Keeping awake until {PowerActions.AwakeUntil:HH:mm}";
     static bool Confirm(string question) => System.Windows.MessageBox.Show(question, "WinSwitch", System.Windows.MessageBoxButton.OKCancel, System.Windows.MessageBoxImage.Question) == System.Windows.MessageBoxResult.OK;
 
@@ -116,9 +133,8 @@ public sealed class TrayIcon : IDisposable
     {
         var engine = App.Engine; var (pluggedIn, percent, hasBattery) = PowerApi.PowerStatus();
         var state = App.Settings.Power.Paused ? "paused" : engine.ActiveProfile?.Name ?? "starting";
-        var power = hasBattery ? $" ({(pluggedIn ? "plugged in" : "on battery")}, {percent}%)" : "";
-        var text = $"WinSwitch: {state}{power}{(PowerActions.Awake ? ", awake" : "")}";
-        notifyIcon.Text = text.Length > 63 ? text[..63] : text;
+        var text = $"WinSwitch\nProfile: {state}" + (hasBattery ? "\n" + BatteryLine(pluggedIn, percent) : "") + (PowerActions.Awake ? "\n" + AwakeLabel() : "");
+        notifyIcon.Text = text.Length > 127 ? text[..127] : text;
         var colour = App.Settings.Power.Paused ? "" : engine.ActiveProfile?.Colour ?? "";
         var question = App.Notices.Unanswered.Count > 0; var light = TaskbarIsLight(); var size = TrayIconSize();
         // One dot: amber for a question, a slow blue flash while an update waits for a restart, otherwise the profile's colour
