@@ -174,7 +174,7 @@ A tweak turns on and off by any of:
 - **Remote:** an MQTT message or the phone page (Home Assistant decides when it's night, bedtime, away).
 - **Tray:** tick it by hand (holds until its next scheduled change).
 
-Volume in a tweak is "Leave", "Set to X%" or "Up/down by X%", and goes back to what it was when the tweak ends (unless you changed it yourself in the meantime).
+Volume in a tweak is "Leave", "Set to X%" or "Up/down by X%", and goes back to what it was when the tweak ends (unless you changed it yourself in the meantime). The same goes for everything that's yours to change (brightness, volume, Wi-Fi, Bluetooth, mobile data): when the profile underneath doesn't set it, the value from before the tweak comes back when the tweak ends, unless you changed it yourself meanwhile (Mat 18 Nov). Plan settings (screen off, sleep…) always return to the profile's, or the Starting profile's, values.
 
 ## Notifications
 
