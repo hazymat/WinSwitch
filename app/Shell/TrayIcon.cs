@@ -8,17 +8,20 @@ public sealed class TrayIcon : IDisposable
 {
     readonly NotifyIcon notifyIcon;
     readonly ContextMenuStrip trayMenu = new();
-    readonly Icon baseIcon = LoadIcon();
-    string iconColour = "";
+    string iconKey = "";
+    IntPtr iconHandle;
+    readonly System.Windows.Threading.DispatcherTimer batteryTimer = new() { Interval = TimeSpan.FromMinutes(1) }; // the fill follows the charge
     App App => App.Instance;
 
     public TrayIcon()
     {
         trayMenu.Opening += (sender, args) => BuildMenu();
-        notifyIcon = new NotifyIcon { Icon = baseIcon, Text = "WinSwitch", ContextMenuStrip = trayMenu, Visible = true };
+        notifyIcon = new NotifyIcon { Text = "WinSwitch", ContextMenuStrip = trayMenu, Visible = true };
         // Left-click opens the same menu (the profiles are the point)
         notifyIcon.MouseUp += (sender, args) => { if (args.Button == MouseButtons.Left) typeof(NotifyIcon).GetMethod("ShowContextMenu", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)?.Invoke(notifyIcon, null); };
         App.Engine.Changed += Refresh; App.Notices.Changed += Refresh; App.Updater.Changed += Refresh; PowerActions.AwakeChanged += Refresh;
+        batteryTimer.Tick += (sender, args) => Refresh(); batteryTimer.Start();
+        Microsoft.Win32.SystemEvents.UserPreferenceChanged += (sender, args) => Refresh(); // light or dark taskbar
         Refresh();
     }
 
@@ -80,7 +83,7 @@ public sealed class TrayIcon : IDisposable
     static string AwakeLabel() => PowerActions.AwakeUntil == DateTime.MaxValue ? "Keeping awake" : $"Keeping awake until {PowerActions.AwakeUntil:HH:mm}";
     static bool Confirm(string question) => System.Windows.MessageBox.Show(question, "WinSwitch", System.Windows.MessageBoxButton.OKCancel, System.Windows.MessageBoxImage.Question) == System.Windows.MessageBoxResult.OK;
 
-    // Hover text and the profile's colour dot on the icon
+    // Hover text, and the battery icon with the profile's colour dot
     void Refresh() => App.Dispatcher.BeginInvoke(() =>
     {
         var engine = App.Engine; var (pluggedIn, percent, hasBattery) = PowerApi.PowerStatus();
@@ -89,25 +92,19 @@ public sealed class TrayIcon : IDisposable
         var text = $"WinSwitch: {state}{power}{(PowerActions.Awake ? ", awake" : "")}";
         notifyIcon.Text = text.Length > 63 ? text[..63] : text;
         var colour = App.Settings.Power.Paused ? "" : engine.ActiveProfile?.Colour ?? "";
-        if (App.Notices.Unanswered.Count > 0) colour += "?";
-        if (colour != iconColour) { iconColour = colour; var previous = notifyIcon.Icon; notifyIcon.Icon = Badged(colour.TrimEnd('?'), colour.EndsWith('?')); if (previous != baseIcon) previous?.Dispose(); }
+        var question = App.Notices.Unanswered.Count > 0; var light = TaskbarIsLight(); var size = SystemInformation.SmallIconSize.Width;
+        var level = hasBattery ? Math.Clamp(percent, 0, 100) / 5 * 5 : 100; var charging = hasBattery && pluggedIn && percent < 100;
+        var key = $"{colour}|{question}|{light}|{size}|{level}|{charging}";
+        if (key == iconKey) return;
+        iconKey = key;
+        var previousHandle = iconHandle;
+        using (var bitmap = BatteryIcon.Draw(size, level / 100.0, charging, colour, question, light)) iconHandle = bitmap.GetHicon();
+        notifyIcon.Icon = Icon.FromHandle(iconHandle);
+        if (previousHandle != IntPtr.Zero) DestroyIcon(previousHandle);
     });
 
-    Icon Badged(string colour, bool question)
-    {
-        if (colour == "" && !question) return baseIcon;
-        var size = SystemInformation.SmallIconSize.Width;
-        using var bitmap = new Bitmap(size, size);
-        using (var graphics = Graphics.FromImage(bitmap))
-        {
-            graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
-            graphics.DrawIcon(baseIcon, new Rectangle(0, 0, size, size));
-            var dot = size * 7 / 16;
-            if (colour != "") { using var brush = new SolidBrush(ColorTranslator.FromHtml(colour)); using var ring = new Pen(Color.FromArgb(20, 22, 28), Math.Max(1, size / 16)); graphics.FillEllipse(brush, size - dot, size - dot, dot - 1, dot - 1); graphics.DrawEllipse(ring, size - dot, size - dot, dot - 1, dot - 1); }
-            if (question) { using var amber = new SolidBrush(Color.FromArgb(224, 145, 47)); graphics.FillEllipse(amber, size - dot, 0, dot - 1, dot - 1); }
-        }
-        return Icon.FromHandle(bitmap.GetHicon());
-    }
+    static bool TaskbarIsLight() { try { return Microsoft.Win32.Registry.GetValue(@"HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize", "SystemUsesLightTheme", 0) is int value && value == 1; } catch { return false; } }
+    [System.Runtime.InteropServices.DllImport("user32.dll")] static extern bool DestroyIcon(IntPtr icon);
 
     static Image Dot(string colour)
     {
@@ -115,12 +112,6 @@ public sealed class TrayIcon : IDisposable
         using var graphics = Graphics.FromImage(bitmap); graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
         try { using var brush = new SolidBrush(ColorTranslator.FromHtml(colour)); graphics.FillEllipse(brush, 1, 1, 10, 10); } catch { }
         return bitmap;
-    }
-
-    static Icon LoadIcon()
-    {
-        using var iconStream = System.Windows.Application.GetResourceStream(new Uri("pack://application:,,,/Assets/WinSwitch.ico")).Stream;
-        return new Icon(iconStream, SystemInformation.SmallIconSize);
     }
 
     public void Dispose() { notifyIcon.Visible = false; notifyIcon.Dispose(); }
