@@ -65,6 +65,13 @@ When the helper is installed, it owns remote control and profile switching (so a
 
 **Helper security.** It runs as LocalSystem, so its files live in `C:\Program Files\WinSwitch Helper` (admin-only), never in the user-writable Velopack folder, otherwise any program could swap the exe and get SYSTEM. It accepts only a fixed list of commands (switch profile, set a known setting, power actions), never paths or command lines. The helper is kept small and changes rarely; when an update carries a new helper version, the tray shows "Update the helper" with one admin prompt.
 
+## When I step away
+
+(Mat 18 Nov, mockup 11.) A card on the profile page, one line per side (Plugged in / On battery), from your last key or mouse move (0) to Never, on fixed stops (1, 2, 3, 5, 10, 15, 20, 30, 45 min, 1, 2, 3, 5 h). Stages in a fixed order, each running until the next: Idle (screen as normal), Dim (Windows' dim timer, with a ☀ chip for the dimmed brightness), Blank, Screen off, Sleep, Hibernate (Windows' own timers). Drag an edge: it snaps to the stops, a bubble shows the time, neighbours are pushed along; arrow keys move the last edge one stop. Drag a stage off the line to stop using it; "Not used" chips put it back. The 🔒 Lock pin can go anywhere on the line, or off it ("Never locks by itself").
+- Blank and Lock are WinSwitch's own (IdleWatcher, checks your last input once a second): Blank puts a black cover over every screen (takes the key that wakes it, gives the window back after; the backlight stays at the Dim brightness), gone at the first key or mouse move. Lock calls Windows' lock at that time. Neither happens during Keep awake, a full-screen game, video or presentation, or while an app asks Windows to keep the screen on.
+- A profile with Lock on the line sets Windows' "Sign in after waking" to not needed, so the screen going off no longer locks by itself (Windows treats screen off as "away" on Modern Standby laptops).
+- "Turn off screen when locked after" stays in Screen › What this sets: it's how long the lock screen stays lit once locked.
+
 ## Tray
 
 The icon (Mat 18 Nov): an upright line-art battery filling the square tray slot on whole pixels (crisp like Windows' own), fill = charge (green charging, red at 20% or less), a bolt beside it that gently breathes while charging (pre-drawn frames swapped 8 times a second, only while plugged in), and one dot under the bolt: the profile's colour, amber for a question, flashing blue for an update. Windows' own battery icon is wider than the square slot apps get, so it can't be matched in width. Editable sheets for pixel pushing: project files winswitch/tray-icon/.

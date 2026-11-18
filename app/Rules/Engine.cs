@@ -23,6 +23,7 @@ public sealed class Engine
     public string SituationId { get; private set; } = "";
     public string Reason { get; private set; } = "";
     public Profile? ActiveProfile { get; private set; }
+    public Dictionary<string, SidePair> EffectiveValues { get; private set; } = new(); // what the profile on now sets, Starting profile and tweaks included
     public List<Tweak> ActiveTweaks { get; private set; } = new();
     public HashSet<string> NotSupported { get; } = new(); // settings Windows refused on this PC (hidden in Settings)
     public bool PluggedIn => PowerApi.PowerStatus().pluggedIn;
@@ -93,7 +94,7 @@ public sealed class Engine
                 if (!freshInstall) AskAboutNewDock(neverSeen, appeared is { Count: > 0 } ? appeared : DockLike(neverSeen));
             }
         }
-        if (Settings.Power.Paused) { ActiveProfile = null; ActiveTweaks = new(); await App.Apps.ApplyAsync(null, PluggedIn); Changed?.Invoke(); return; }
+        if (Settings.Power.Paused) { ActiveProfile = null; ActiveTweaks = new(); EffectiveValues = new(); await App.Apps.ApplyAsync(null, PluggedIn); Changed?.Invoke(); return; }
         var (pluggedIn, batteryPercent, _) = PowerApi.PowerStatus();
         var (situation, reason) = Match(Current, pluggedIn, batteryPercent);
         var situationId = situation?.Id ?? "default";
@@ -106,6 +107,9 @@ public sealed class Engine
         SituationId = situationId; Reason = reason; ActiveProfile = profile; ActiveTweaks = tweaks; lastPluggedIn = pluggedIn;
         if (profile == null) { Changed?.Invoke(); return; }
         var effective = Effective(profile, tweaks, Settings.Profiles.FirstOrDefault(candidate => candidate.IsStarting));
+        // WinSwitch locks at the profile's Lock time, so Windows mustn't also ask for a password whenever the screen goes off (Mat 18 Nov)
+        if (effective.TryGetValue("lockAfter", out var lockPair) && (lockPair.Ac != null || lockPair.Dc != null)) effective["signInOnWake"] = new SidePair { Ac = lockPair.Ac == null ? effective.GetValueOrDefault("signInOnWake")?.Ac : 0, Dc = lockPair.Dc == null ? effective.GetValueOrDefault("signInOnWake")?.Dc : 0 };
+        EffectiveValues = effective;
         var signature = profile.Id + "|" + string.Join(",", tweaks.Select(tweak => tweak.Id)) + "|" + pluggedIn + "|" + profile.SoundOutput + "|" + System.Text.Json.JsonSerializer.Serialize(effective);
         var signatureChanged = force || signature != lastSignature;
         if (signatureChanged)

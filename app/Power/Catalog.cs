@@ -1,7 +1,7 @@
 namespace WinSwitch.Power;
 
 // How a setting is reached: a power plan value (powrprof), or one of the few things outside the plan
-public enum SettingKind { Plan, Brightness, PowerMode, Refresh, WiFi, Bluetooth, MobileBroadband, Volume, Helper }
+public enum SettingKind { Plan, Brightness, PowerMode, Refresh, WiFi, Bluetooth, MobileBroadband, Volume, Helper, Idle } // Idle: done by WinSwitch itself while you're away (IdleWatcher)
 
 public record Option(int Value, string Label);
 
@@ -37,6 +37,8 @@ public static class Catalog
         new("dimAfter", Screen, "Dim screen after", SettingKind.Plan, true, false, Time, displayGroup, new("17aaa29b-8b43-4b94-aafe-35f64daaf1ee")),
         new("dimmedBrightness", Screen, "Dimmed brightness", SettingKind.Plan, true, false, Percent(5), displayGroup, new("f1fbfde2-a960-4165-9f88-50667911ce96")),
         new("adaptiveBrightness", Screen, "Adaptive brightness", SettingKind.Plan, true, false, offOn, displayGroup, new("fbd9aa66-9553-4097-ba44-ed6e9d65eab8")),
+        new("blankAfter", Screen, "Blank (black) screen after", SettingKind.Idle, true, false, Time),
+        new("lockAfter", Screen, "Lock after", SettingKind.Idle, true, false, Time),
         new("lockedScreenOff", Screen, "Turn off screen when locked after", SettingKind.Plan, true, false, Time.Where(option => option.Value is > 0 and <= 1800).Prepend(new Option(30, "30 seconds")).Prepend(new Option(10, "10 seconds")).ToList(), displayGroup, new("8ec4b3a5-6868-48c2-be75-4f3044be88a7")),
         // Sleep and lid
         new("sleepAfter", Sleep, "Sleep after", SettingKind.Plan, true, true, Time, sleepGroup, new("29f6c1db-86da-48c5-9fdb-f2b67b1f44da")),
