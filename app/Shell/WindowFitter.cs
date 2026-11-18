@@ -37,7 +37,7 @@ public static class WindowFitter
             (waiting.Count == 1 ? "Fit it" : "Fit them", () => { Fit(waiting.ToList()); waiting.Clear(); }),
             ("Always", () => { Settings.General.FitWindows = "always"; Settings.Save(); App.Instance.NotifySettingsChanged(); Fit(waiting.ToList()); waiting.Clear(); }),
             ("Not now", () => waiting.Clear()),
-        });
+        }, () => { waiting.RemoveWhere(window => !TooBig(window)); return waiting.Count > 0; }); // closed, resized or moved back
     }
 
     // Settings › General › Fit windows now
@@ -83,7 +83,7 @@ public static class WindowFitter
     }
 
     // ---- Win32 ----
-    static List<IntPtr> AllWindows() { var windows = new List<IntPtr>(); EnumWindows((window, parameter) => { windows.Add(window); return true; }, IntPtr.Zero); return windows; }
+    internal static List<IntPtr> AllWindows() { var windows = new List<IntPtr>(); EnumWindows((window, parameter) => { windows.Add(window); return true; }, IntPtr.Zero); return windows; }
     static Rect Frame(IntPtr window) => DwmGetWindowAttribute(window, 9 /* DWMWA_EXTENDED_FRAME_BOUNDS */, out Rect frame, Marshal.SizeOf<Rect>()) == 0 ? frame : GetWindowRect(window, out var outer) ? outer : default;
     static bool Cloaked(IntPtr window) => DwmGetWindowAttribute(window, 14 /* DWMWA_CLOAKED */, out int cloaked, sizeof(int)) == 0 && cloaked != 0;
     static (Rect screen, Rect work) Screen(IntPtr window) { var info = new MonitorInfo { Size = Marshal.SizeOf<MonitorInfo>() }; GetMonitorInfo(MonitorFromWindow(window, 2 /* NEAREST */), ref info); return (info.Monitor, info.Work); }

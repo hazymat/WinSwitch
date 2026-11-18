@@ -234,6 +234,30 @@ public sealed class Engine
         // Making the plan active (again) is what makes Windows use the new values
         PowerApi.SetActiveScheme(plan);
         Settings.Save();
+        _ = VerifyWritesAsync(plan, effective);
+    }
+
+    // Windows (or a policy on the PC) can put a plan value straight back after WinSwitch writes it, e.g. Sign in after waking on Mat's laptop after every update (18 Nov).
+    // Read back a few seconds later: a value Windows won't keep is left to Windows (hidden on this PC) instead of being reported as "You changed … in Windows"
+    bool verifyingWrites;
+    async Task VerifyWritesAsync(Guid plan, Dictionary<string, SidePair> effective)
+    {
+        verifyingWrites = true;
+        try
+        {
+            await Task.Delay(4000);
+            foreach (var (key, pair) in effective)
+            {
+                if (Catalog.Find(key) is not { Kind: SettingKind.Plan } setting || NotSupported.Contains(key)) continue;
+                var acNow = (int?)Reader.ReadPlan(plan, setting, true); var dcNow = (int?)Reader.ReadPlan(plan, setting, false);
+                if ((pair.Ac == null || acNow == pair.Ac) && (pair.Dc == null || dcNow == pair.Dc)) continue;
+                NotSupported.Add(key); Settings.Power.LastWritten[key] = new SidePair { Ac = acNow, Dc = dcNow };
+                CrashReporter.Write($"Windows put {setting.Label} back to its own value; left to Windows on this PC", null, false);
+            }
+            Settings.Save();
+        }
+        catch (Exception error) { CrashReporter.Write("Checking what Windows kept", error, false); }
+        finally { verifyingWrites = false; }
     }
 
     // A refresh rate change blanks the screen for a moment, so a card says so first (with a way out) and offers Undo after (Mat 17 Nov)
@@ -279,6 +303,7 @@ public sealed class Engine
     bool askedAboutPlan;
     void WatchWindowsChanges()
     {
+        if (verifyingWrites) return;
         if (Settings.Power.Paused || ActiveProfile == null || !Guid.TryParse(Settings.Power.OwnPlan, out var plan)) return;
         try
         {
@@ -289,10 +314,12 @@ public sealed class Engine
                 {
                     askedAboutPlan = true;
                     var planName = PowerApi.SchemeName(active.Value);
-                    App.Notices.Ask("plan", "Power plan changed in Windows", $"You picked {(planName == "" ? "another plan" : $"the {planName} plan")}. WinSwitch won't change anything until you say.", new() { ("Use WinSwitch again", () => { askedAboutPlan = false; Resume(); }), ("Leave it", () => { askedAboutPlan = false; Pause(); }) });
+                    App.Notices.Ask("plan", "Power plan changed in Windows", $"You picked {(planName == "" ? "another plan" : $"the {planName} plan")}. WinSwitch won't change anything until you say.", new() { ("Use WinSwitch again", () => { askedAboutPlan = false; Resume(); }), ("Leave it", () => { askedAboutPlan = false; Pause(); }) },
+                        () => PowerApi.ActiveScheme() is { } now && now != plan); // back on WinSwitch's plan: nothing to ask
                 }
                 return;
             }
+            askedAboutPlan = false;
             foreach (var (key, written) in Settings.Power.LastWritten.ToList())
             {
                 if (Catalog.Find(key) is not { Kind: SettingKind.Plan } setting) continue;
@@ -302,6 +329,9 @@ public sealed class Engine
                     if (before == null || now == null || before == now) continue;
                     if (pluggedIn) written.Ac = now; else written.Dc = now; // kept straight away, never overwritten
                     Settings.Save();
+                    // Changed back to what the profile has: nothing to ask, and an earlier question about it is withdrawn
+                    var side = setting.TwoSided ? (pluggedIn ? " (plugged in)" : " (on battery)") : "";
+                    if (EffectiveValues.TryGetValue(key, out var profileValue) && (pluggedIn ? profileValue.Ac : profileValue.Dc) == now) { App.Notices.Withdraw("changed:" + key + side); continue; }
                     AskToKeep(setting, pluggedIn, now.Value);
                 }
             }
@@ -327,7 +357,7 @@ public sealed class Engine
             ($"Save to {profile.Name}", () => SaveTo(new[] { profile })),
             ("All profiles", () => SaveTo(Settings.Profiles.Where(candidate => !candidate.IsStarting))),
             ("Just for now", () => { }),
-        });
+        }, () => !Settings.Power.Paused && ActiveProfile?.Id == profile.Id); // another profile took over: its own values apply now
     }
 
     // A dock with a monitor is connected when one of its monitors is (Mat 18 Nov: the monitor is what counts, not the network adapter, hubs or power).
@@ -355,6 +385,6 @@ public sealed class Engine
             ("Set up new profile", () => App.SetUpNewPlace(isDock ? "New dock" : dockLike.Values.First(), dockThings)),
             ($"Use {ActiveProfile?.Name ?? "this profile"}", () => { if (ActiveProfile == null) return; Settings.Situations.Insert(0, new Situation { Kind = "dock", Name = isDock ? "Dock" : dockLike.Values.First(), Things = dockThings, ProfileId = ActiveProfile.Id }); Settings.Save(); App.NotifySettingsChanged(); EvaluateSoon(); }),
             ("Ignore", () => { Settings.General.IgnoredThings.AddRange(dockLike.Keys); Settings.Save(); }),
-        });
+        }, () => dockLike.Keys.Any(Current.Things.ContainsKey)); // unplugged again before answering
     }
 }
