@@ -7,6 +7,7 @@ using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
+using WinSwitch.Shell;
 namespace WinSwitch.Apps;
 
 // "Switching to Out and about": a glass panel above the clock with a progress line, and a small Close / Keep prompt for each app with a window (SPEC.md › Apps to stop)
@@ -48,7 +49,7 @@ public sealed class SwitchPanel : Window
     }
 
     // Bottom right of the main screen's work area, growing upwards as rows are added
-    void Place() { var area = SystemParameters.WorkArea; Left = area.Right - Width - 6; Top = area.Bottom - ActualHeight - 6; }
+    void Place() { var corner = Corner.BottomRight(this); Left = corner.X - Width - 6; Top = corner.Y - ActualHeight - 6; }
 
     public Row AddLine(string path, string text) { var row = new Row(this, path); row.Working(text); rows.Children.Add(row.Element); return row; }
 
