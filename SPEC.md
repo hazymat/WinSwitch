@@ -150,7 +150,7 @@ Apps are matched by program path, not name, so two different "sync.exe" never ge
 3. **Startup folder / Run keys / anything else:** started again with the recorded command line, as you.
 Elevated apps need the helper to start again; without it, WinSwitch says so instead of starting them unelevated.
 
-**Switching shows a glass panel** (optional, on by default when a profile stops apps): "Switching to Out and about" with a progress line, staying until the switch is done. Apps with a window open stack inside it as small prompts: "Lightroom is open. Close it?" [Close] [Keep], with **Close all** at the bottom. Background apps are stopped without asking. Each app is first asked to close the way Windows does at sign-out (Ctrl+C for console apps like Syncthing), then ended after 10 seconds.
+**Switching shows a glass panel** (optional, on by default when a profile stops apps): "Switching to Out and about" with a progress line, staying until the switch is done. Apps with a window open stack inside it as small prompts: "Lightroom is open. Close it?" [Close] [Keep], with **Close all** at the bottom. Background apps are stopped without asking. Each app is first asked to close the way Windows does at sign-out (Ctrl+C for console apps like Syncthing), then ended after 10 seconds. An app launched by another app on the same list (SyncTrayzor starts Syncthing) is never started on its own: it comes back with its parent, otherwise two Syncthings fight over one database ("Syncthing failed to start", Mat 18 Nov). An app already running is never started again.
 
 **Switching away** starts again exactly what WinSwitch stopped, unless the new profile stops it too; anything you closed yourself or kept is left alone. Remembered across restarts.
 
