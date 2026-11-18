@@ -150,7 +150,7 @@ public sealed class TrayIcon : IDisposable
         var level = hasBattery ? Math.Clamp(percent, 0, 100) / 5 * 5 : 100;
         if (charging != pulseTimer.Enabled) { pulseStep = 0; if (charging) pulseTimer.Start(); else pulseTimer.Stop(); } // the bolt breathes while charging (plugged in, so no battery cost)
         var key = $"{dot}|{light}|{size}|{level}|{plugged}|{charging}";
-        if (key != iconKey) { iconKey = key; foreach (var handle in iconFrames.Values) DestroyIcon(handle); iconFrames.Clear(); drawIcon = step => BatteryIcon.Draw(size, level / 100.0, plugged, charging, dot, light, charging ? PulseStrength(step) : 1); }
+        if (key != iconKey) { iconKey = key; foreach (var handle in iconFrames.Values) DestroyIcon(handle); iconFrames.Clear(); drawIcon = step => BatteryIcon.Draw(size, level / 100.0, plugged, charging, dot, light, charging ? PulseStrength(step) : 1, step / (double)PulseSteps); }
         ShowIcon();
     });
 
