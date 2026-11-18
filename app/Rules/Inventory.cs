@@ -52,7 +52,7 @@ public class Inventory
     }
 
     // The network we're on, recognised by its router's hardware address: Windows only shows Wi-Fi names to apps with Location on (SPEC.md › Situations)
-    static (string thing, string name) CurrentNetwork()
+    public static (string thing, string name) CurrentNetwork()
     {
         try
         {

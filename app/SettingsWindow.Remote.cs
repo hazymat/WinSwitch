@@ -25,6 +25,36 @@ public partial class SettingsWindow
     }
 
     // ---- Phone and Shortcuts ----
+    // Only on these networks: the phone page stops listening anywhere else (a café, a hotel), so nobody there can reach it (Mat 18 Nov)
+    StackPanel NetworksCard()
+    {
+        var card = new StackPanel();
+        var onlyBox = new CheckBox { Content = "Only on these networks", IsChecked = Remote.OnlyOnNetworks, FontWeight = FontWeights.SemiBold };
+        onlyBox.Click += (sender, args) =>
+        {
+            Remote.OnlyOnNetworks = onlyBox.IsChecked == true;
+            if (Remote.OnlyOnNetworks && Remote.Networks.Count == 0 && App.Phone.Network.thing != "") Remote.Networks[App.Phone.Network.thing] = "Home"; // the network you're on when you tick it
+            Settings.Save(); App.Phone.Apply(); FillPhone();
+        };
+        card.Children.Add(onlyBox);
+        if (!Remote.OnlyOnNetworks) { card.Children.Add(Text("Off: the phone page answers on any network marked Private in Windows.", 12.5, false, quietBrush, new Thickness(0, 4, 0, 0))); return card; }
+        foreach (var (thing, name) in Remote.Networks.ToList())
+        {
+            var nameBox = new TextBox { Text = name, Width = 200, Margin = new Thickness(0, 0, 8, 0) };
+            nameBox.LostFocus += (sender, args) => { if (nameBox.Text.Trim() != "" && nameBox.Text.Trim() != Remote.Networks[thing]) { Remote.Networks[thing] = nameBox.Text.Trim(); Settings.Save(); } };
+            var row = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 8, 0, 0), Children = { nameBox } };
+            if (thing == App.Phone.Network.thing) row.Children.Add(Text("Connected now", 12.5, false, new SolidColorBrush(Color.FromRgb(0x1D, 0x6B, 0x35)), new Thickness(0, 3, 8, 0)));
+            row.Children.Add(Button("Remove", () => { Remote.Networks.Remove(thing); Settings.Save(); App.Phone.Apply(); FillPhone(); }));
+            card.Children.Add(row);
+        }
+        if (App.Phone.Network.thing != "" && !Remote.Networks.ContainsKey(App.Phone.Network.thing))
+            card.Children.Add(new WrapPanel { Margin = new Thickness(0, 8, 0, 0), Children = { Button("Add the network I'm on now", () => { Remote.Networks[App.Phone.Network.thing] = Remote.Networks.Count == 0 ? "Home" : "Network " + (Remote.Networks.Count + 1); Settings.Save(); App.Phone.Apply(); FillPhone(); }), Text(App.Phone.Network.name, 12.5, false, quietBrush, new Thickness(4, 3, 0, 0)) } });
+        if (App.Phone.Network.thing == "") card.Children.Add(Text("Not connected to a network right now.", 12.5, false, quietBrush, new Thickness(0, 6, 0, 0)));
+        return card;
+    }
+
+    void OnPhoneNetworkChanged() => Dispatcher.BeginInvoke(FillPhone);
+
     void FillPhone()
     {
         phonePage.Children.Clear();
@@ -37,8 +67,9 @@ public partial class SettingsWindow
         };
         var portBox = new TextBox { Text = Remote.PhonePort.ToString(), Width = 70, Margin = new Thickness(8, 0, 0, 0) };
         portBox.LostFocus += (sender, args) => { if (int.TryParse(portBox.Text, out var port) && port is >= 1024 and <= 65535 && port != Remote.PhonePort) { Remote.PhonePort = port; Settings.Save(); App.Phone.Apply(); FillPhone(); } };
-        var status = App.Phone.Running ? Text($"On at http://{RemoteControl.LanAddress()}:{App.Phone.Port}", 12.5, false, new SolidColorBrush(Color.FromRgb(0x1D, 0x6B, 0x35)), new Thickness(0, 6, 0, 0)) : Text(App.Phone.Problem != "" ? App.Phone.Problem : "Off", 12.5, false, App.Phone.Problem != "" ? new SolidColorBrush(Color.FromRgb(0xB2, 0x6B, 0x00)) : quietBrush, new Thickness(0, 6, 0, 0));
+        var status = Remote.PhoneOn && App.Phone.OffOnThisNetwork ? Text("Off on this network. It only answers on the networks below.", 12.5, false, new SolidColorBrush(Color.FromRgb(0xB2, 0x6B, 0x00)), new Thickness(0, 6, 0, 0)) : App.Phone.Running ? Text($"On at http://{RemoteControl.LanAddress()}:{App.Phone.Port}", 12.5, false, new SolidColorBrush(Color.FromRgb(0x1D, 0x6B, 0x35)), new Thickness(0, 6, 0, 0)) : Text(App.Phone.Problem != "" ? App.Phone.Problem : "Off", 12.5, false, App.Phone.Problem != "" ? new SolidColorBrush(Color.FromRgb(0xB2, 0x6B, 0x00)) : quietBrush, new Thickness(0, 6, 0, 0));
         phonePage.Children.Add(Card(new StackPanel { Children = { onBox, status, new Expander { Header = "Port", Style = (Style)FindResource("More"), Content = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 6, 0, 0), Children = { Text("Listen on port", 13, false, null, new Thickness(0, 3, 0, 0)), portBox } } } } }));
+        phonePage.Children.Add(Card(NetworksCard()));
         if (!App.Phone.Running) return;
         var token = RemoteControl.EnsureToken();
         var pageUrl = $"http://{RemoteControl.LanAddress()}:{App.Phone.Port}/p/{token}/";
