@@ -81,7 +81,7 @@ public sealed class TrayIcon : IDisposable
         if (settings.Tweaks.Count > 0)
         {
             trayMenu.Items.Add(new ToolStripSeparator());
-            foreach (var tweak in settings.Tweaks) { var on = engine.TweakIsOn(tweak); trayMenu.Items.Add(new ToolStripMenuItem(tweak.Name + (tweak.Scheduled ? $"  ({tweak.From} to {tweak.To})" : ""), null, (sender, args) => engine.SetTweak(tweak, !on)) { Checked = on }); }
+            foreach (var tweak in settings.Tweaks) { var on = engine.TweakIsOn(tweak); trayMenu.Items.Add(new ToolStripMenuItem(tweak.Name + (tweak.Scheduled ? $"  ({tweak.From} to {tweak.To})" : ""), Dot(tweak.Colour), (sender, args) => engine.SetTweak(tweak, !on)) { Checked = on }); }
         }
         // Remote control, its own group: what's on, and a way into its settings
         trayMenu.Items.Add(new ToolStripSeparator());

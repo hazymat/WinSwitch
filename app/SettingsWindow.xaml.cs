@@ -164,8 +164,7 @@ public partial class SettingsWindow : Window
         // Name, colour, Anything else, delete
         var nameBox = new TextBox { Text = profile.Name, FontSize = 17, FontWeight = FontWeights.SemiBold, MinWidth = 240, Padding = new Thickness(4, 2, 4, 2), IsReadOnly = profile.IsStarting };
         nameBox.TextChanged += (sender, args) => { if (nameBox.Text.Trim() != "") { profile.Name = nameBox.Text.Trim(); Changed(); } };
-        var swatches = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(12, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
-        foreach (var colour in Templates.Colours) { var swatch = Dot(colour, 18); swatch.Cursor = Cursors.Hand; swatch.Margin = new Thickness(0, 0, 6, 0); if (colour == profile.Colour) { swatch.BorderBrush = Brushes.Black; swatch.BorderThickness = new Thickness(2); } swatch.MouseLeftButtonUp += (sender, args) => { profile.Colour = colour; Changed(); FillProfileEditor(); }; swatches.Children.Add(swatch); }
+        var swatches = Swatches(profile.Colour, colour => { profile.Colour = colour; Changed(); FillProfileEditor(); });
         var headRow = new DockPanel { Margin = new Thickness(0, 0, 0, 10) };
         headRow.Children.Add(new StackPanel { Orientation = Orientation.Horizontal, Children = { nameBox, swatches } });
         profileEditor.Children.Add(headRow);
@@ -377,6 +376,14 @@ public partial class SettingsWindow : Window
         }
         tweakList.Children.Add(Link("＋ New tweak", () => { var tweak = new Tweak { Name = Settings.Tweaks.Count == 0 ? "Night" : "New tweak", Colour = "#5B5FC7" }; Settings.Tweaks.Add(tweak); selectedTweakId = tweak.Id; Settings.Save(); FillTweaks(); }));
     }
+    // The colour row for profiles and tweaks (Mat 18 Nov: more colours)
+    StackPanel Swatches(string current, Action<string> pick)
+    {
+        var swatches = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(12, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
+        foreach (var colour in Templates.Colours) { var swatch = Dot(colour, 18); swatch.Cursor = Cursors.Hand; swatch.Margin = new Thickness(0, 0, 5, 0); if (colour == current) { swatch.BorderBrush = Brushes.Black; swatch.BorderThickness = new Thickness(2); } swatch.MouseLeftButtonUp += (sender, args) => pick(colour); swatches.Children.Add(swatch); }
+        return swatches;
+    }
+
     void FillTweakEditor()
     {
         tweakEditor.Children.Clear();
@@ -385,7 +392,7 @@ public partial class SettingsWindow : Window
         var nameBox = new TextBox { Text = tweak.Name, FontSize = 17, FontWeight = FontWeights.SemiBold, MinWidth = 240, Padding = new Thickness(4, 2, 4, 2) };
         nameBox.TextChanged += (sender, args) => { if (nameBox.Text.Trim() != "") { tweak.Name = nameBox.Text.Trim(); Changed(); } };
         var delete = Button("Delete", () => { Settings.Tweaks.Remove(tweak); Settings.Power.TweakOverrides.Remove(tweak.Id); selectedTweakId = ""; Changed(); FillTweaks(); }); delete.Margin = new Thickness(0); DockPanel.SetDock(delete, Dock.Right);
-        tweakEditor.Children.Add(new DockPanel { Margin = new Thickness(0, 0, 0, 12), Children = { delete, new StackPanel { Orientation = Orientation.Horizontal, Children = { nameBox } } } });
+        tweakEditor.Children.Add(new DockPanel { Margin = new Thickness(0, 0, 0, 12), Children = { delete, new StackPanel { Orientation = Orientation.Horizontal, Children = { nameBox, Swatches(tweak.Colour, colour => { tweak.Colour = colour; Changed(); FillTweaks(); }) } } } });
         // When: schedule
         var scheduled = new CheckBox { Content = "On a schedule", IsChecked = tweak.Scheduled, Margin = new Thickness(0) };
         var fromBox = new TextBox { Text = tweak.From, Width = 60, Margin = new Thickness(8, 0, 6, 0) }; var toBox = new TextBox { Text = tweak.To, Width = 60, Margin = new Thickness(6, 0, 0, 0) };
