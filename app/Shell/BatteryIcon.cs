@@ -2,12 +2,12 @@ using System.Drawing;
 using System.Drawing.Drawing2D;
 namespace WinSwitch.Shell;
 
-// The tray icon: a bold line-art battery on its side like Windows' own (Mat 18 Nov, option A). Fill = charge (green while charging, red at 20% or less),
-// a white bolt with a clear gap around it while charging, the profile's colour dot on the bottom-right corner with a clear ring (as Windows badges its lock icon),
-// an amber dot top right when a question waits. White on a dark taskbar, black on a light one, transparent behind. Drawn on a 32-unit grid at 4x and scaled down
+// The tray icon: a bold upright line-art battery using the full height (Mat 18 Nov, option D). Fill = charge (green while charging, red at 20% or less),
+// a bolt beside it while charging, and one dot beside it: the profile's colour, amber when a question waits, flashing blue when an update is ready (TrayIcon).
+// White on a dark taskbar, black on a light one, transparent behind. Drawn on a 32-unit grid at 4x and scaled down
 public static class BatteryIcon
 {
-    public static Bitmap Draw(int size, double level, bool charging, string colour, bool question, bool light)
+    public static Bitmap Draw(int size, double level, bool charging, string dotColour, bool light)
     {
         const int Super = 4;
         var big = size * Super; var unit = big / 32f;
@@ -17,28 +17,27 @@ public static class BatteryIcon
             graphics.SmoothingMode = SmoothingMode.AntiAlias; graphics.Clear(Color.Transparent);
             var ink = light ? Color.Black : Color.White;
             var stroke = Math.Max(1, (int)Math.Round(size / 13f)) * Super;
-            float left = 1 * unit, top = 5.5f * unit, right = 27.5f * unit, bottom = 26.5f * unit;
+            float left = 4 * unit, top = 4 * unit, right = 19.5f * unit, bottom = 31.5f * unit, middle = (left + right) / 2;
             using var inkBrush = new SolidBrush(ink);
             using (var pen = new Pen(ink, stroke)) using (var body = Rounded(left + stroke / 2f, top + stroke / 2f, right - left - stroke, bottom - top - stroke, 3 * unit)) graphics.DrawPath(pen, body);
-            using (var cap = Rounded(right - stroke / 2f, 11.5f * unit, 30.5f * unit - right + stroke / 2f, 9 * unit, 1.2f * unit)) graphics.FillPath(inkBrush, cap);
+            using (var cap = Rounded(middle - 4 * unit, 0.5f * unit, 8 * unit, top - 0.5f * unit + stroke / 2f, 1.2f * unit)) graphics.FillPath(inkBrush, cap);
             var gap = stroke + 1.6f * unit;
             float innerLeft = left + gap, innerTop = top + gap, innerRight = right - gap, innerBottom = bottom - gap;
             if (level > 0)
             {
                 var fillColour = charging ? (light ? Color.FromArgb(40, 150, 60) : Color.FromArgb(160, 225, 160)) : level <= 0.2 ? Color.FromArgb(232, 72, 72) : ink;
+                var fillTop = innerBottom - (innerBottom - innerTop) * (float)Math.Clamp(level, 0.06, 1);
                 using var fillBrush = new SolidBrush(fillColour);
-                using var fill = Rounded(innerLeft, innerTop, (innerRight - innerLeft) * (float)Math.Clamp(level, 0.04, 1), innerBottom - innerTop, unit); graphics.FillPath(fillBrush, fill);
+                using var fill = Rounded(innerLeft, fillTop, innerRight - innerLeft, innerBottom - fillTop, unit); graphics.FillPath(fillBrush, fill);
             }
             if (charging)
             {
-                float height = 17 * unit, width = 10.5f * unit, boltX = (left + right) / 2 - width / 2, boltY = (top + bottom) / 2 - height / 2;
+                float height = 15 * unit, width = 9 * unit, boltX = 26.5f * unit - width / 2, boltY = 9 * unit - height / 2;
                 using var bolt = new GraphicsPath();
                 bolt.AddPolygon(new[] { new PointF(boltX + width * .62f, boltY), new PointF(boltX, boltY + height * .56f), new PointF(boltX + width * .45f, boltY + height * .56f), new PointF(boltX + width * .38f, boltY + height), new PointF(boltX + width, boltY + height * .42f), new PointF(boltX + width * .55f, boltY + height * .42f) });
-                Clear(graphics, bolt, 2.4f * unit);
                 graphics.FillPath(inkBrush, bolt);
             }
-            if (TryColour(colour, out var dotColour)) Dot(graphics, dotColour, 25.5f * unit, 26 * unit, 6 * unit, 1.5f * unit);
-            if (question) Dot(graphics, Color.FromArgb(224, 145, 47), 27 * unit, 5 * unit, 4.5f * unit, 1.5f * unit);
+            if (TryColour(dotColour, out var colour)) Dot(graphics, colour, 26.5f * unit, 26 * unit, 5.2f * unit, 0);
         }
         var bitmap = new Bitmap(size, size, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
         using (var graphics = Graphics.FromImage(bitmap)) { graphics.InterpolationMode = InterpolationMode.HighQualityBicubic; graphics.PixelOffsetMode = PixelOffsetMode.HighQuality; graphics.CompositingQuality = CompositingQuality.HighQuality; graphics.DrawImage(canvas, new Rectangle(0, 0, size, size)); }
@@ -49,7 +48,7 @@ public static class BatteryIcon
     static void Dot(Graphics graphics, Color colour, float centreX, float centreY, float radius, float ring)
     {
         using var circle = new GraphicsPath(); circle.AddEllipse(centreX - radius, centreY - radius, radius * 2, radius * 2);
-        Clear(graphics, circle, ring * 2);
+        if (ring > 0) Clear(graphics, circle, ring * 2);
         using var brush = new SolidBrush(colour); graphics.FillPath(brush, circle);
     }
 

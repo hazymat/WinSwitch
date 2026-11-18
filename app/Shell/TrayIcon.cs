@@ -10,6 +10,8 @@ public sealed class TrayIcon : IDisposable
     readonly ContextMenuStrip trayMenu = new();
     string iconKey = "";
     IntPtr iconHandle;
+    readonly System.Windows.Threading.DispatcherTimer flashTimer = new() { Interval = TimeSpan.FromMilliseconds(900) }; // update waiting
+    bool flashOn = true;
     readonly System.Windows.Threading.DispatcherTimer batteryTimer = new() { Interval = TimeSpan.FromMinutes(1) }; // the fill follows the charge
     App App => App.Instance;
 
@@ -21,6 +23,7 @@ public sealed class TrayIcon : IDisposable
         notifyIcon.MouseUp += (sender, args) => { if (args.Button == MouseButtons.Left) typeof(NotifyIcon).GetMethod("ShowContextMenu", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)?.Invoke(notifyIcon, null); };
         App.Engine.Changed += Refresh; App.Notices.Changed += Refresh; App.Updater.Changed += Refresh; PowerActions.AwakeChanged += Refresh;
         batteryTimer.Tick += (sender, args) => Refresh(); batteryTimer.Start();
+        flashTimer.Tick += (sender, args) => { flashOn = !flashOn; flashTimer.Interval = TimeSpan.FromMilliseconds(flashOn ? 900 : 500); Refresh(); };
         Microsoft.Win32.SystemEvents.UserPreferenceChanged += (sender, args) => Refresh(); // light or dark taskbar
         Refresh();
     }
@@ -93,12 +96,16 @@ public sealed class TrayIcon : IDisposable
         notifyIcon.Text = text.Length > 63 ? text[..63] : text;
         var colour = App.Settings.Power.Paused ? "" : engine.ActiveProfile?.Colour ?? "";
         var question = App.Notices.Unanswered.Count > 0; var light = TaskbarIsLight(); var size = SystemInformation.SmallIconSize.Width;
+        // One dot: amber for a question, a slow blue flash while an update waits for a restart, otherwise the profile's colour
+        var updateWaiting = App.Updater.ReadyVersion != "";
+        if (updateWaiting != flashTimer.IsEnabled) { flashOn = true; if (updateWaiting) flashTimer.Start(); else flashTimer.Stop(); }
+        var dot = question ? "#E0912F" : updateWaiting ? (flashOn ? "#4CC2FF" : "") : colour;
         var level = hasBattery ? Math.Clamp(percent, 0, 100) / 5 * 5 : 100; var charging = hasBattery && pluggedIn && percent < 100;
-        var key = $"{colour}|{question}|{light}|{size}|{level}|{charging}";
+        var key = $"{dot}|{light}|{size}|{level}|{charging}";
         if (key == iconKey) return;
         iconKey = key;
         var previousHandle = iconHandle;
-        using (var bitmap = BatteryIcon.Draw(size, level / 100.0, charging, colour, question, light)) iconHandle = bitmap.GetHicon();
+        using (var bitmap = BatteryIcon.Draw(size, level / 100.0, charging, dot, light)) iconHandle = bitmap.GetHicon();
         notifyIcon.Icon = Icon.FromHandle(iconHandle);
         if (previousHandle != IntPtr.Zero) DestroyIcon(previousHandle);
     });
