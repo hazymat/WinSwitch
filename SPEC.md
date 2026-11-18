@@ -179,6 +179,7 @@ WinSwitch's own small glass cards, sliding up just above the tray clock (as WinG
 
 **Questions** (stay until answered or ×; one at a time, the rest wait):
 - New dock or monitor seen: "This is a new place. What should it use?" [Set up new profile] [Use Desk] [Ignore this]. "Set up" opens a two-question mini wizard (screen, sleep) with Desk's values pre-filled.
+- Another app's window bigger than its screen (after dragging it to a smaller monitor, or a dock or monitor change; Mat 18 Nov, Edison Mail): "Fit to the screen? Edison Mail is bigger than the screen it's on." [Fit it] [Always] [Not now]. Settings › General › Windows bigger than the screen: Ask (default) / Fit without asking / Leave alone, plus Fit windows now. Only resizable, visible, unowned windows; only ever smaller, kept on their own screen; borderless full screen skipped; maximised windows stay maximised and only their restore size is fitted. Snapped windows can't be fixed (Windows keeps their pre-snap size privately).
 - Changed in Windows: [Save to Desk] [All profiles] [Just for now].
 - Suggestions (at most one a week).
 

@@ -108,6 +108,14 @@
           </Border>
           <Border Style="{StaticResource Card}">
             <StackPanel>
+              <TextBlock Text="Windows bigger than the screen" Style="{StaticResource CardTitle}" />
+              <ComboBox x:Name="fitWindowsCombo" MinWidth="360" HorizontalAlignment="Left"><ComboBoxItem Content="Ask me before fitting them" Tag="ask" /><ComboBoxItem Content="Fit them without asking" Tag="always" /><ComboBoxItem Content="Leave them alone" Tag="never" /></ComboBox>
+              <TextBlock Style="{StaticResource Quiet}" Text="After you drag a window to another screen, or a dock or monitor changes. Windows are only ever made smaller, on the screen they're on. Maximised windows stay maximised and get a size that fits for when you restore them." />
+              <WrapPanel Margin="0,8,0,0"><Button x:Name="fitWindowsButton" Content="Fit windows now" /><TextBlock x:Name="fitWindowsDone" Style="{StaticResource Quiet}" VerticalAlignment="Center" Margin="4,0,0,4" /></WrapPanel>
+            </StackPanel>
+          </Border>
+          <Border Style="{StaticResource Card}">
+            <StackPanel>
               <TextBlock Text="Set up" Style="{StaticResource CardTitle}" />
               <WrapPanel Margin="0,6,0,0"><Button x:Name="wizardButton" Content="Set up with the wizard…" /><Button x:Name="quitButton" Content="Quit WinSwitch" /></WrapPanel>
             </StackPanel>
