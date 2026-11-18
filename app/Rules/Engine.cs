@@ -326,12 +326,13 @@ public sealed class Engine
         });
     }
 
-    // Most of its things present, and when it has a monitor or a dock network adapter, at least one of those: the laptop's own camera, Bluetooth and Wi-Fi can't keep a dock "connected" after unplugging (Mat 18 Nov)
+    // A dock with a monitor is connected when one of its monitors is (Mat 18 Nov: the monitor is what counts, not the network adapter, hubs or power).
+    // A dock with no monitor (USB only) still matches on most of its things
     static bool DockMatches(Situation situation, Inventory inventory)
     {
-        if (situation.Things.Count == 0 || situation.Things.Keys.Count(inventory.Things.ContainsKey) < Math.Max(1, (int)Math.Ceiling(situation.Things.Count * 0.6))) return false;
-        var dockLike = DockLike(situation.Things);
-        return dockLike.Count == 0 || dockLike.Keys.Any(inventory.Things.ContainsKey);
+        var monitors = situation.Things.Keys.Where(thing => thing.StartsWith("monitor:")).ToList();
+        if (monitors.Count > 0) return monitors.Any(inventory.Things.ContainsKey);
+        return situation.Things.Count > 0 && situation.Things.Keys.Count(inventory.Things.ContainsKey) >= Math.Max(1, (int)Math.Ceiling(situation.Things.Count * 0.6));
     }
 
     // ---- A dock or monitor never seen before (SPEC.md › Notifications) ----

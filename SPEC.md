@@ -228,7 +228,7 @@ A situation can match any of:
 
 Power source is not a situation trigger, because every profile already has its Plugged in and On battery values. "Charger only" is just the Anything else profile's Plugged in side. If you ever want charger-only to be a different profile from the dock, the dock situation above it catches the dock first.
 
-**Learning a dock** (task-based, no device ids to type): Settings › Situations › Add › "Learn what I plug in". It asks you to unplug, then plug in, and lists what appeared ("Dell WD19 USB hub, Realtek USB Ethernet, DELL U2720Q, Logitech receiver"). You name it ("Desk dock") and it matches when most of them are present, so a dock still matches with a monitor switched off. Monitor ids reuse WinGCal's monitor-setup code.
+**Learning a dock** (task-based, no device ids to type): Settings › Situations › Add › "Learn what I plug in". It asks you to unplug, then plug in, and lists what appeared ("Dell WD19 USB hub, Realtek USB Ethernet, DELL U2720Q, Logitech receiver"). You name it ("Desk dock") and it matches when one of its monitors is connected (Mat 18 Nov: the monitor is what counts, not the network adapter, hubs or power; on battery while docked keeps the dock profile, using its On battery values). A dock with no monitor matches when most of its things are present. Monitor ids reuse WinGCal's monitor-setup code.
 
 Changes are debounced (2 seconds after the last plug event) so a dock connecting in stages switches once. Each switch shows an info card (see Notifications); a dock or monitor it has never seen asks what to do.
 
