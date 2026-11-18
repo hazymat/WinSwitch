@@ -17,7 +17,7 @@ public sealed class TrayIcon : IDisposable
     bool flashOn = true;
     string seenUpdate = ""; // the ready version the user has seen explained; it flashes until then, then stays solid blue
     bool UpdateUnseen => App.Updater.ReadyVersion != "" && seenUpdate != App.Updater.ReadyVersion;
-    ToolStripMenuItem? updateItem; // flashes while the menu is open
+    ToolStripMenuItem? updateItem, messageItem; // flash while the menu is open
     readonly Image blueDot = Dot(Notices.UpdateColour), amberDot = Dot(Notices.QuestionColour), noDot = new Bitmap(64, 64);
     readonly System.Windows.Threading.DispatcherTimer batteryTimer = new() { Interval = TimeSpan.FromMinutes(1) }; // the fill follows the charge
     App App => App.Instance;
@@ -45,7 +45,7 @@ public sealed class TrayIcon : IDisposable
         App.Engine.Changed += Refresh; App.Notices.Changed += Refresh; App.Updater.Changed += Refresh; PowerActions.AwakeChanged += Refresh;
         batteryTimer.Tick += (sender, args) => Refresh(); batteryTimer.Start();
         pulseTimer.Tick += (sender, args) => { pulseStep = (pulseStep + 1) % PulseSteps; ShowIcon(); };
-        flashTimer.Tick += (sender, args) => { flashOn = !flashOn; flashTimer.Interval = flashOn ? 900 : 500; if (menuOpen && updateItem != null) { updateItem.Image = flashOn ? blueDot : noDot; updateItem.Invalidate(); } Refresh(); };
+        flashTimer.Tick += (sender, args) => { flashOn = !flashOn; flashTimer.Interval = flashOn ? 900 : 500; if (menuOpen && updateItem != null) { updateItem.Image = flashOn ? blueDot : noDot; updateItem.Invalidate(); } if (menuOpen && messageItem != null) { messageItem.Image = flashOn ? amberDot : noDot; messageItem.Invalidate(); } Refresh(); };
         Microsoft.Win32.SystemEvents.UserPreferenceChanged += (sender, args) => Refresh(); // light or dark taskbar
         Microsoft.Win32.SystemEvents.DisplaySettingsChanged += (sender, args) => Refresh(); // taskbar scaling
         Refresh();
@@ -60,7 +60,8 @@ public sealed class TrayIcon : IDisposable
         // The same dots as the tray icon, so a flashing blue or amber dot leads to its explanation (Mat 18 Nov)
         updateItem = null;
         if (App.Updater.ReadyVersion != "") { updateItem = Bold($"Update WinSwitch to {App.Updater.ReadyVersion}", async () => await App.Updater.RestartToUpdateAsync()); updateItem.Image = blueDot; trayMenu.Items.Add(updateItem); }
-        if (App.Notices.Unanswered.Count > 0) { var questionItem = Bold(App.Notices.Unanswered.Count == 1 ? "Show message" : $"Show message ({App.Notices.Unanswered.Count} waiting)", App.Notices.ShowUnanswered); questionItem.Image = amberDot; trayMenu.Items.Add(questionItem); }
+        messageItem = null;
+        if (App.Notices.Unanswered.Count > 0) { var questionItem = messageItem = Bold(App.Notices.Unanswered.Count == 1 ? "Show message" : $"Show message ({App.Notices.Unanswered.Count} waiting)", App.Notices.ShowUnanswered); questionItem.Image = amberDot; trayMenu.Items.Add(questionItem); }
         if (settings.Power.Paused)
         {
             trayMenu.Items.Add(new ToolStripMenuItem("WinSwitch is paused: Windows' own settings are in charge") { Enabled = false });
@@ -144,9 +145,10 @@ public sealed class TrayIcon : IDisposable
         var question = App.Notices.Unanswered.Count > 0; var light = TaskbarIsLight(); var size = TrayIconSize();
         // One dot: amber for a question, a slow blue flash while an update waits for a restart, otherwise the profile's colour
         var updateWaiting = App.Updater.ReadyVersion != ""; var updateUnseen = UpdateUnseen;
-        var flashing = updateUnseen || menuOpen && updateItem != null;
+        // Amber flashes for as long as a message waits (Mat 18 Nov: the reference for WinGCal and WinSqueeze); blue flashes until the update has been seen, then stays solid
+        var flashing = question || updateUnseen || menuOpen && updateItem != null;
         if (flashing != flashTimer.Enabled) { flashOn = true; if (flashing) flashTimer.Start(); else flashTimer.Stop(); }
-        var dot = question ? Notices.QuestionColour : updateWaiting ? (!updateUnseen || flashOn ? Notices.UpdateColour : "") : colour;
+        var dot = question ? (flashOn ? Notices.QuestionColour : "") : updateWaiting ? (!updateUnseen || flashOn ? Notices.UpdateColour : "") : colour;
         var level = hasBattery ? Math.Clamp(percent, 0, 100) / 5 * 5 : 100;
         if (charging != pulseTimer.Enabled) { pulseStep = 0; if (charging) pulseTimer.Start(); else pulseTimer.Stop(); } // the bolt breathes while charging (plugged in, so no battery cost)
         var key = $"{dot}|{light}|{size}|{level}|{plugged}|{charging}";
