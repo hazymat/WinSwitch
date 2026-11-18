@@ -17,22 +17,32 @@ public sealed class PhoneServer
     public string Problem { get; private set; } = "";
     // The network we're on, and whether the phone page is off here because it's not one of the allowed networks (Mat 18 Nov)
     public (string thing, string name) Network { get; private set; } = Rules.Inventory.CurrentNetwork();
-    public bool OffOnThisNetwork => App.Settings.Remote.OnlyOnNetworks && !App.Settings.Remote.Networks.ContainsKey(Network.thing);
+    public string Wifi { get; private set; } = WifiNetworks.Connected(); // the Wi-Fi network's name, "" on a wired network
+    public bool OffOnThisNetwork => App.Settings.Remote.OnlyOnNetworks && !(Wifi != "" && App.Settings.Remote.Networks.ContainsKey("wifi:" + Wifi)) && !App.Settings.Remote.Networks.ContainsKey(Network.thing);
     public event Action? Changed;
     readonly System.Windows.Threading.DispatcherTimer networkTimer = new() { Interval = TimeSpan.FromSeconds(3) }; // networks connect in stages
 
     public PhoneServer()
     {
-        networkTimer.Tick += async (sender, args) => { networkTimer.Stop(); Network = await Task.Run(Rules.Inventory.CurrentNetwork); Apply(); Changed?.Invoke(); };
+        networkTimer.Tick += async (sender, args) => { networkTimer.Stop(); Network = await Task.Run(Rules.Inventory.CurrentNetwork); Wifi = await Task.Run(WifiNetworks.Connected); Upgrade(); Apply(); Changed?.Invoke(); };
+        Upgrade();
         System.Net.NetworkInformation.NetworkChange.NetworkAddressChanged += (sender, args) => App.Dispatcher.BeginInvoke(() => { networkTimer.Stop(); networkTimer.Start(); });
     }
     public bool Running => listener != null;
+
+    // Networks allowed before they were picked by Wi-Fi name were kept by their router: once on that Wi-Fi, keep it by its name instead
+    void Upgrade()
+    {
+        var networks = App.Settings.Remote.Networks;
+        if (Wifi == "" || !networks.ContainsKey(Network.thing)) return;
+        networks.Remove(Network.thing); networks["wifi:" + Wifi] = Wifi; App.Settings.Save();
+    }
 
     public void Apply()
     {
         var remote = App.Settings.Remote;
         if (!remote.PhoneOn) { Stop(); return; }
-        if (OffOnThisNetwork) { if (Running) RemoteControl.Log("phone", "network", $"off: {(Network.name == "" ? "no network" : Network.name)} isn't an allowed network"); Stop(); return; }
+        if (OffOnThisNetwork) { if (Running) RemoteControl.Log("phone", "network", $"off: {(Wifi != "" ? Wifi : Network.name == "" ? "no network" : Network.name)} isn't an allowed network"); Stop(); return; }
         if (Running && Port == remote.PhonePort) return;
         Stop();
         try

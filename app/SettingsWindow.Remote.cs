@@ -26,30 +26,39 @@ public partial class SettingsWindow
 
     // ---- Phone and Shortcuts ----
     // Only on these networks: the phone page stops listening anywhere else (a café, a hotel), so nobody there can reach it (Mat 18 Nov)
+    // Tick the Wi-Fi networks (Windows' saved ones) where the phone page may answer; a wired network can be added while on it
     StackPanel NetworksCard()
     {
-        var card = new StackPanel();
+        var card = new StackPanel(); var phone = App.Phone;
         var onlyBox = new CheckBox { Content = "Only on these networks", IsChecked = Remote.OnlyOnNetworks, FontWeight = FontWeights.SemiBold };
         onlyBox.Click += (sender, args) =>
         {
             Remote.OnlyOnNetworks = onlyBox.IsChecked == true;
-            if (Remote.OnlyOnNetworks && Remote.Networks.Count == 0 && App.Phone.Network.thing != "") Remote.Networks[App.Phone.Network.thing] = "Home"; // the network you're on when you tick it
-            Settings.Save(); App.Phone.Apply(); FillPhone();
+            if (Remote.OnlyOnNetworks && Remote.Networks.Count == 0) { if (phone.Wifi != "") Remote.Networks["wifi:" + phone.Wifi] = phone.Wifi; else if (phone.Network.thing != "") Remote.Networks[phone.Network.thing] = "Wired network"; } // the network you're on when you tick it
+            Settings.Save(); phone.Apply(); FillPhone();
         };
         card.Children.Add(onlyBox);
         if (!Remote.OnlyOnNetworks) { card.Children.Add(Text("Off: the phone page answers on any network marked Private in Windows.", 12.5, false, quietBrush, new Thickness(0, 4, 0, 0))); return card; }
-        foreach (var (thing, name) in Remote.Networks.ToList())
+        var wifiNames = WifiNetworks.Saved().Concat(Remote.Networks.Keys.Where(key => key.StartsWith("wifi:")).Select(key => key[5..])).Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(name => !name.Equals(phone.Wifi, StringComparison.OrdinalIgnoreCase)).ThenBy(name => !Remote.Networks.ContainsKey("wifi:" + name)).ThenBy(name => name, StringComparer.OrdinalIgnoreCase).ToList();
+        var list = new StackPanel();
+        foreach (var name in wifiNames)
         {
-            var nameBox = new TextBox { Text = name, Width = 200, Margin = new Thickness(0, 0, 8, 0) };
-            nameBox.LostFocus += (sender, args) => { if (nameBox.Text.Trim() != "" && nameBox.Text.Trim() != Remote.Networks[thing]) { Remote.Networks[thing] = nameBox.Text.Trim(); Settings.Save(); } };
-            var row = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 8, 0, 0), Children = { nameBox } };
-            if (thing == App.Phone.Network.thing) row.Children.Add(Text("Connected now", 12.5, false, new SolidColorBrush(Color.FromRgb(0x1D, 0x6B, 0x35)), new Thickness(0, 3, 8, 0)));
-            row.Children.Add(Button("Remove", () => { Remote.Networks.Remove(thing); Settings.Save(); App.Phone.Apply(); FillPhone(); }));
+            var box = new CheckBox { Content = name + (name.Equals(phone.Wifi, StringComparison.OrdinalIgnoreCase) ? "  (connected now)" : ""), IsChecked = Remote.Networks.ContainsKey("wifi:" + name), Margin = new Thickness(0, 6, 0, 0) };
+            box.Click += (sender, args) => { if (box.IsChecked == true) Remote.Networks["wifi:" + name] = name; else Remote.Networks.Remove("wifi:" + name); Settings.Save(); phone.Apply(); if (name.Equals(phone.Wifi, StringComparison.OrdinalIgnoreCase)) FillPhone(); }; // the status above changes
+            list.Children.Add(box);
+        }
+        if (wifiNames.Count > 0) card.Children.Add(new ScrollViewer { Content = list, MaxHeight = 230, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Margin = new Thickness(20, 2, 0, 0) });
+        foreach (var (thing, name) in Remote.Networks.Where(network => network.Key.StartsWith("network:")).ToList())
+        {
+            var row = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(20, 8, 0, 0), Children = { Text(name, 13, false, null, new Thickness(0, 3, 8, 0)) } };
+            if (thing == phone.Network.thing) row.Children.Add(Text("Connected now", 12.5, false, new SolidColorBrush(Color.FromRgb(0x1D, 0x6B, 0x35)), new Thickness(0, 3, 8, 0)));
+            row.Children.Add(Button("Remove", () => { Remote.Networks.Remove(thing); Settings.Save(); phone.Apply(); FillPhone(); }));
             card.Children.Add(row);
         }
-        if (App.Phone.Network.thing != "" && !Remote.Networks.ContainsKey(App.Phone.Network.thing))
-            card.Children.Add(new WrapPanel { Margin = new Thickness(0, 8, 0, 0), Children = { Button("Add the network I'm on now", () => { Remote.Networks[App.Phone.Network.thing] = Remote.Networks.Count == 0 ? "Home" : "Network " + (Remote.Networks.Count + 1); Settings.Save(); App.Phone.Apply(); FillPhone(); }), Text(App.Phone.Network.name, 12.5, false, quietBrush, new Thickness(4, 3, 0, 0)) } });
-        if (App.Phone.Network.thing == "") card.Children.Add(Text("Not connected to a network right now.", 12.5, false, quietBrush, new Thickness(0, 6, 0, 0)));
+        if (phone.Wifi == "" && phone.Network.thing != "" && !Remote.Networks.ContainsKey(phone.Network.thing))
+            card.Children.Add(new WrapPanel { Margin = new Thickness(20, 8, 0, 0), Children = { Button("Add this wired network", () => { Remote.Networks[phone.Network.thing] = "Wired network" + (Remote.Networks.Keys.Count(key => key.StartsWith("network:")) is var wired and > 0 ? " " + (wired + 1) : ""); Settings.Save(); phone.Apply(); FillPhone(); }), Text(phone.Network.name, 12.5, false, quietBrush, new Thickness(4, 3, 0, 0)) } });
+        if (phone.Wifi == "" && phone.Network.thing == "") card.Children.Add(Text("Not connected to a network right now.", 12.5, false, quietBrush, new Thickness(20, 6, 0, 0)));
         return card;
     }
 
