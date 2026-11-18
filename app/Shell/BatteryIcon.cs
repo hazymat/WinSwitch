@@ -3,7 +3,7 @@ using System.Drawing.Drawing2D;
 namespace WinSwitch.Shell;
 
 // The tray icon: a bold upright line-art battery filling the square tray slot (Mat 18 Nov, option D, then B: wider and on whole pixels so it's as crisp as Windows' own).
-// Fill = charge (green while charging, red at 20% or less), a bolt beside it while plugged in (breathing while charging, see TrayIcon; still and faint when plugged in but not charging), and one dot under the bolt:
+// Fill = charge (green while charging, red at 20% or less), a bolt beside it while plugged in (breathing while charging, see TrayIcon; still (full strength) when plugged in but not charging), and one dot under the bolt:
 // the profile's colour, amber when a question waits, flashing blue when an update is ready. White on a dark taskbar, black on a light one, transparent behind
 public static class BatteryIcon
 {

@@ -74,7 +74,7 @@ When the helper is installed, it owns remote control and profile switching (so a
 
 ## Tray
 
-The icon (Mat 18 Nov): an upright line-art battery filling the square tray slot on whole pixels (crisp like Windows' own), fill = charge (green charging, red at 20% or less), a bolt beside it while plugged in: it gently breathes while Windows reports charging (pre-drawn frames swapped 8 times a second), and is still and faint when plugged in but not charging (charge limit, weak charger, full), with the hover text saying "plugged in, not charging" or "fully charged", and one dot under the bolt: the profile's colour, amber for a question, flashing blue for an update. Windows' own battery icon is wider than the square slot apps get, so it can't be matched in width. Editable sheets for pixel pushing: project files winswitch/tray-icon/.
+The icon (Mat 18 Nov): an upright line-art battery filling the square tray slot on whole pixels (crisp like Windows' own), fill = charge (green charging, red at 20% or less), a bolt beside it while plugged in: it gently breathes while Windows reports charging (pre-drawn frames swapped 8 times a second), and is still (full strength, Mat 18 Nov) when plugged in but not charging (charge limit, weak charger, full), with the hover text saying "plugged in, not charging" or "fully charged", and one dot under the bolt: the profile's colour, amber for a question, flashing blue for an update. Windows' own battery icon is wider than the square slot apps get, so it can't be matched in width. Editable sheets for pixel pushing: project files winswitch/tray-icon/.
 
 Left-click opens the profile menu, right-click the full menu:
 
