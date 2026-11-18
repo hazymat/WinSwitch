@@ -33,12 +33,12 @@ public sealed class TrayIcon : IDisposable
             foreach (ToolStripItem item in trayMenu.Items) { if (item.Tag is "bold") item.Font = new Font(menuFont, FontStyle.Bold); else if (item.Tag is "small") item.Font = new Font(menuFont.FontFamily, menuFont.Size * 0.85f); }
         };
         notifyIcon = new NotifyIcon { Text = "WinSwitch", ContextMenuStrip = trayMenu, Visible = true };
-        // Left-click explains a waiting dot first (the question, or the update card), otherwise opens the same menu (the profiles are the point)
+        // Left-click explains a dot first (amber message card, then the blue update card), otherwise opens the same menu (the profiles are the point)
         notifyIcon.MouseUp += (sender, args) =>
         {
             if (args.Button != MouseButtons.Left) return;
             if (App.Notices.Unanswered.Count > 0) { App.Notices.ShowUnanswered(); return; }
-            if (UpdateUnseen) { ShowUpdateCard(); return; }
+            if (App.Updater.ReadyVersion != "") { ShowUpdateCard(); return; } // seen or not: the blue dot always explains itself
             typeof(NotifyIcon).GetMethod("ShowContextMenu", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)?.Invoke(notifyIcon, null);
         };
         trayMenu.Closed += (sender, args) => { menuOpen = false; if (updateItem != null) seenUpdate = App.Updater.ReadyVersion; Refresh(); }; // seen in the menu: the tray dot stops flashing
@@ -134,7 +134,11 @@ public sealed class TrayIcon : IDisposable
         var report = hasBattery ? BatteryReport() : null; plugged = hasBattery && pluggedIn;
         var charging = plugged && percent < 100 && (report == null ? true : report.Status == Windows.System.Power.BatteryStatus.Charging);
         var state = App.Settings.Power.Paused ? "paused" : engine.ActiveProfile?.Name ?? "starting";
-        var text = $"WinSwitch\nProfile: {state}" + (hasBattery ? "\n" + BatteryLine(pluggedIn, percent, charging, report) : "") + (PowerActions.Awake ? "\n" + AwakeLabel() : "");
+        // Anything a dot means comes first, with its dot, so hovering always says what it is (Mat 18 Nov); the tip is capped at 127 characters
+        var notes = "";
+        if (App.Notices.Unanswered.Count > 0) { var title = App.Notices.Unanswered[0].Title; notes += "\n🟠 " + (title.Length > 44 ? title[..43] + "…" : title) + (App.Notices.Unanswered.Count > 1 ? $" (+{App.Notices.Unanswered.Count - 1} more)" : ""); }
+        if (App.Updater.ReadyVersion != "") notes += $"\n🔵 Update ready: {App.Updater.ReadyVersion}";
+        var text = $"WinSwitch{notes}\nProfile: {state}" + (hasBattery ? "\n" + BatteryLine(pluggedIn, percent, charging, report) : "") + (PowerActions.Awake ? "\n" + AwakeLabel() : "");
         notifyIcon.Text = text.Length > 127 ? text[..127] : text;
         var colour = App.Settings.Power.Paused ? "" : engine.ActiveProfile?.Colour ?? "";
         var question = App.Notices.Unanswered.Count > 0; var light = TaskbarIsLight(); var size = TrayIconSize();
