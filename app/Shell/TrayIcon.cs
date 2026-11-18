@@ -12,6 +12,8 @@ public sealed class TrayIcon : IDisposable
     IntPtr iconHandle;
     readonly System.Windows.Threading.DispatcherTimer flashTimer = new() { Interval = TimeSpan.FromMilliseconds(900) }; // update waiting
     bool flashOn = true;
+    string seenUpdate = ""; // the ready version the user has seen explained; it flashes until then, then stays solid blue
+    bool UpdateUnseen => App.Updater.ReadyVersion != "" && seenUpdate != App.Updater.ReadyVersion;
     ToolStripMenuItem? updateItem; // flashes with the icon while the menu is open
     readonly Image blueDot = Dot("#4CC2FF"), amberDot = Dot("#E0912F"), noDot = new Bitmap(12, 12);
     readonly System.Windows.Threading.DispatcherTimer batteryTimer = new() { Interval = TimeSpan.FromMinutes(1) }; // the fill follows the charge
@@ -21,8 +23,15 @@ public sealed class TrayIcon : IDisposable
     {
         trayMenu.Opening += (sender, args) => BuildMenu();
         notifyIcon = new NotifyIcon { Text = "WinSwitch", ContextMenuStrip = trayMenu, Visible = true };
-        // Left-click opens the same menu (the profiles are the point)
-        notifyIcon.MouseUp += (sender, args) => { if (args.Button == MouseButtons.Left) typeof(NotifyIcon).GetMethod("ShowContextMenu", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)?.Invoke(notifyIcon, null); };
+        // Left-click explains a waiting dot first (the question, or the update card), otherwise opens the same menu (the profiles are the point)
+        notifyIcon.MouseUp += (sender, args) =>
+        {
+            if (args.Button != MouseButtons.Left) return;
+            if (App.Notices.Unanswered.Count > 0) { App.Notices.ShowUnanswered(); return; }
+            if (UpdateUnseen) { ShowUpdateCard(); return; }
+            typeof(NotifyIcon).GetMethod("ShowContextMenu", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)?.Invoke(notifyIcon, null);
+        };
+        trayMenu.Closed += (sender, args) => { if (updateItem != null) { seenUpdate = App.Updater.ReadyVersion; Refresh(); } }; // seen in the menu: the dot stops flashing
         App.Engine.Changed += Refresh; App.Notices.Changed += Refresh; App.Updater.Changed += Refresh; PowerActions.AwakeChanged += Refresh;
         batteryTimer.Tick += (sender, args) => Refresh(); batteryTimer.Start();
         flashTimer.Tick += (sender, args) => { flashOn = !flashOn; flashTimer.Interval = TimeSpan.FromMilliseconds(flashOn ? 900 : 500); if (updateItem != null) updateItem.Image = flashOn ? blueDot : noDot; Refresh(); };
@@ -101,8 +110,8 @@ public sealed class TrayIcon : IDisposable
         var colour = App.Settings.Power.Paused ? "" : engine.ActiveProfile?.Colour ?? "";
         var question = App.Notices.Unanswered.Count > 0; var light = TaskbarIsLight(); var size = SystemInformation.SmallIconSize.Width;
         // One dot: amber for a question, a slow blue flash while an update waits for a restart, otherwise the profile's colour
-        var updateWaiting = App.Updater.ReadyVersion != "";
-        if (updateWaiting != flashTimer.IsEnabled) { flashOn = true; if (updateWaiting) flashTimer.Start(); else flashTimer.Stop(); }
+        var updateWaiting = App.Updater.ReadyVersion != ""; var updateUnseen = UpdateUnseen;
+        if (updateUnseen != flashTimer.IsEnabled) { flashOn = true; if (updateUnseen) flashTimer.Start(); else flashTimer.Stop(); }
         var dot = question ? "#E0912F" : updateWaiting ? (flashOn ? "#4CC2FF" : "") : colour;
         var level = hasBattery ? Math.Clamp(percent, 0, 100) / 5 * 5 : 100; var charging = hasBattery && pluggedIn && percent < 100;
         var key = $"{dot}|{light}|{size}|{level}|{charging}";
@@ -113,6 +122,12 @@ public sealed class TrayIcon : IDisposable
         notifyIcon.Icon = Icon.FromHandle(iconHandle);
         if (previousHandle != IntPtr.Zero) DestroyIcon(previousHandle);
     });
+
+    void ShowUpdateCard()
+    {
+        seenUpdate = App.Updater.ReadyVersion; Refresh();
+        App.Notices.Info("Update ready", $"WinSwitch {App.Updater.ReadyVersion} is downloaded. The blue dot stays until you restart.", () => _ = App.Updater.RestartToUpdateAsync(), "Restart now", always: true);
+    }
 
     static bool TaskbarIsLight() { try { return Microsoft.Win32.Registry.GetValue(@"HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize", "SystemUsesLightTheme", 0) is int value && value == 1; } catch { return false; } }
     [System.Runtime.InteropServices.DllImport("user32.dll")] static extern bool DestroyIcon(IntPtr icon);
