@@ -26,7 +26,7 @@ public static class DpiFixer
             (waiting.Count == 1 ? "Fix it" : "Fix them", () => { foreach (var path in waiting) Override(path); waiting.Clear(); }),
             ("Not now", () => waiting.Clear()),
             ("Leave it", () => { Settings.General.DpiLeftAlone.AddRange(waiting); Settings.Save(); waiting.Clear(); }),
-        });
+        }, () => { var stillTiny = WindowFitter.AllWindows().Select(Misscaled).OfType<string>().ToHashSet(StringComparer.OrdinalIgnoreCase); waiting.RemoveWhere(path => !stillTiny.Contains(path)); return waiting.Count > 0; }); // back on the screen it started on, or closed
     }
 
     // Another app's visible top-level window that is per-monitor aware v1 (handles screen changes itself, title bar never scaled) on a screen whose scaling differs from sign-in

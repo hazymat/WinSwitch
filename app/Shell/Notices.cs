@@ -12,7 +12,7 @@ namespace WinSwitch.Shell;
 // Info fades after 5 s with an optional Undo; a question stays until answered, and one closed with × waits in the tray menu
 public sealed class Notices
 {
-    public record Question(string Key, string Title, string Text, List<(string label, Action action)> Buttons);
+    public record Question(string Key, string Title, string Text, List<(string label, Action action)> Buttons, Func<bool>? StillRelevant);
     readonly List<Question> waiting = new(); // asked but not yet shown (one at a time, or held while quiet)
     public List<Question> Unanswered { get; } = new(); // closed with ×: kept in the tray menu
     NoticeCard? infoCard, questionCard;
@@ -23,7 +23,27 @@ public sealed class Notices
     // The tray dot, its menu row and the card share one colour, so a coloured dot always leads to a card of the same colour (Mat 18 Nov)
     public const string QuestionColour = "#E0912F", UpdateColour = "#4CC2FF", PlainColour = "#58E28C";
 
-    public Notices() { quietTimer.Tick += (sender, args) => ShowNextQuestion(); quietTimer.Start(); }
+    readonly DispatcherTimer relevanceTimer = new() { Interval = TimeSpan.FromSeconds(3) };
+    string withdrawing = "";
+
+    public Notices()
+    {
+        quietTimer.Tick += (sender, args) => ShowNextQuestion(); quietTimer.Start();
+        // A question whose reason has gone (unplugged again, changed back, window closed) is withdrawn: its card closes and the amber dot stops (Mat 18 Nov)
+        relevanceTimer.Tick += (sender, args) =>
+        {
+            var questions = waiting.Concat(Unanswered).Append(showing).OfType<Question>().Where(question => question.StillRelevant != null).ToList();
+            foreach (var question in questions) { bool relevant; try { relevant = question.StillRelevant!(); } catch { relevant = true; } if (!relevant) Withdraw(question.Key); }
+        };
+        relevanceTimer.Start();
+    }
+
+    public void Withdraw(string key)
+    {
+        var removed = waiting.RemoveAll(question => question.Key == key) + Unanswered.RemoveAll(question => question.Key == key);
+        if (showing?.Key == key && questionCard != null) { withdrawing = key; questionCard.Close(); withdrawing = ""; removed++; }
+        if (removed > 0) Changed?.Invoke();
+    }
 
     public void Info(string title, string text, Action? undo = null, string actionLabel = "Undo", bool always = false, string accent = PlainColour)
     {
@@ -34,11 +54,11 @@ public sealed class Notices
         infoCard.ShowAt(questionCard?.ActualHeight + 10 ?? 0);
     }
 
-    public void Ask(string key, string title, string text, List<(string label, Action action)> buttons)
+    public void Ask(string key, string title, string text, List<(string label, Action action)> buttons, Func<bool>? stillRelevant = null)
     {
         waiting.RemoveAll(question => question.Key == key); Unanswered.RemoveAll(question => question.Key == key);
         if (showing?.Key == key) return;
-        waiting.Add(new Question(key, title, text, buttons));
+        waiting.Add(new Question(key, title, text, buttons, stillRelevant));
         ShowNextQuestion();
     }
 
@@ -54,7 +74,7 @@ public sealed class Notices
         questionCard = new NoticeCard(question.Title, question.Text, question.Buttons.Select(button => (button.label, (Action)(() => { answered = true; try { button.action(); } catch (Exception error) { CrashReporter.Write("Answering a question", error, false); } }))).ToList(), isQuestion: true, QuestionColour);
         questionCard.Closed += (sender, args) =>
         {
-            if (!answered) Unanswered.Add(question);
+            if (!answered && withdrawing != question.Key) Unanswered.Add(question);
             showing = null; questionCard = null; Changed?.Invoke();
             App.Dispatcher.BeginInvoke(ShowNextQuestion);
         };
