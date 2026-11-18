@@ -230,7 +230,7 @@ public static class AppCatalog
         return windows;
     }
 
-    static string? ImagePath(int processId)
+    public static string? ImagePath(int processId)
     {
         var handle = OpenProcess(0x1000 /* PROCESS_QUERY_LIMITED_INFORMATION */, false, processId);
         if (handle == IntPtr.Zero) return null;

@@ -580,6 +580,9 @@ public partial class SettingsWindow : Window
         void ShowStopped() { var names = Settings.Power.Stopped.Select(app => app.Name).ToList(); stoppedText.Text = names.Count == 0 ? "Nothing is stopped now." : "Stopped now: " + string.Join(", ", names); startStoppedButton.IsEnabled = names.Count > 0; }
         startStoppedButton.Click += async (sender, args) => { await App.Apps.StartTheseAgainAsync(Settings.Power.Stopped.ToList()); ShowStopped(); };
         ShowStopped(); App.Engine.Changed += () => Dispatcher.BeginInvoke(ShowStopped);
+        fitWindowsCombo.SelectedItem = fitWindowsCombo.Items.Cast<ComboBoxItem>().FirstOrDefault(item => (string)item.Tag == Settings.General.FitWindows) ?? fitWindowsCombo.Items[0];
+        fitWindowsCombo.SelectionChanged += (sender, args) => { if (fitWindowsCombo.SelectedItem is ComboBoxItem { Tag: string mode }) { Settings.General.FitWindows = mode; Settings.Save(); } };
+        fitWindowsButton.Click += (sender, args) => { var fitted = WindowFitter.FitAllNow(); fitWindowsDone.Text = fitted == 0 ? "Every window already fits." : $"Fitted {fitted} window{(fitted == 1 ? "" : "s")}."; };
         wizardButton.Click += (sender, args) => App.OpenWizard();
         quitButton.Click += (sender, args) => App.Quit();
     }
