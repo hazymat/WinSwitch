@@ -2,12 +2,12 @@ using System.Drawing;
 using System.Drawing.Drawing2D;
 namespace WinSwitch.Shell;
 
-// The tray icon: a bold upright line-art battery like Windows' own (Mat 18 Nov). Fill = charge (red at 20% or less), a bolt while charging,
-// the profile's colour dot beside it (never over it), an amber dot when a question waits. White on a dark taskbar, black on a light one, transparent behind.
-// Drawn on a 32-unit grid at 4x and scaled down, so it stays crisp at every scaling.
+// The tray icon: a bold upright line-art battery using the full height (Mat 18 Nov, option D). Fill = charge (green while charging, red at 20% or less),
+// a bolt beside it while charging, and one dot beside it: the profile's colour, amber when a question waits, flashing blue when an update is ready (TrayIcon).
+// White on a dark taskbar, black on a light one, transparent behind. Drawn on a 32-unit grid at 4x and scaled down
 public static class BatteryIcon
 {
-    public static Bitmap Draw(int size, double level, bool charging, string colour, bool question, bool light)
+    public static Bitmap Draw(int size, double level, bool charging, string dotColour, bool light)
     {
         const int Super = 4;
         var big = size * Super; var unit = big / 32f;
@@ -16,37 +16,49 @@ public static class BatteryIcon
         {
             graphics.SmoothingMode = SmoothingMode.AntiAlias; graphics.Clear(Color.Transparent);
             var ink = light ? Color.Black : Color.White;
-            var hasDot = TryColour(colour, out var dotColour);
             var stroke = Math.Max(1, (int)Math.Round(size / 13f)) * Super;
-            float left = (hasDot ? 2 : 6.5f) * unit, right = (hasDot ? 20.5f : 25.5f) * unit, top = 6 * unit, bottom = 31 * unit, middle = (left + right) / 2;
+            float left = 4 * unit, top = 4 * unit, right = 19.5f * unit, bottom = 31.5f * unit, middle = (left + right) / 2;
             using var inkBrush = new SolidBrush(ink);
             using (var pen = new Pen(ink, stroke)) using (var body = Rounded(left + stroke / 2f, top + stroke / 2f, right - left - stroke, bottom - top - stroke, 3 * unit)) graphics.DrawPath(pen, body);
-            using (var cap = Rounded(middle - 3.5f * unit, 2 * unit, 7 * unit, top - 2 * unit + stroke / 2f, unit)) graphics.FillPath(inkBrush, cap);
-            var gap = stroke + 1.5f * unit;
+            using (var cap = Rounded(middle - 4 * unit, 0.5f * unit, 8 * unit, top - 0.5f * unit + stroke / 2f, 1.2f * unit)) graphics.FillPath(inkBrush, cap);
+            var gap = stroke + 1.6f * unit;
             float innerLeft = left + gap, innerTop = top + gap, innerRight = right - gap, innerBottom = bottom - gap;
-            var fillTop = innerBottom - (innerBottom - innerTop) * (float)Math.Clamp(level, 0, 1);
             if (level > 0)
             {
-                using var fillBrush = new SolidBrush(level <= 0.2 && !charging ? Color.FromArgb(232, 72, 72) : ink);
+                var fillColour = charging ? (light ? Color.FromArgb(40, 150, 60) : Color.FromArgb(160, 225, 160)) : level <= 0.2 ? Color.FromArgb(232, 72, 72) : ink;
+                var fillTop = innerBottom - (innerBottom - innerTop) * (float)Math.Clamp(level, 0.06, 1);
+                using var fillBrush = new SolidBrush(fillColour);
                 using var fill = Rounded(innerLeft, fillTop, innerRight - innerLeft, innerBottom - fillTop, unit); graphics.FillPath(fillBrush, fill);
             }
             if (charging)
             {
-                float height = 15 * unit, width = 9 * unit, boltX = middle - width / 2, boltY = (top + bottom) / 2 - height / 2;
+                float height = 15 * unit, width = 9 * unit, boltX = 26.5f * unit - width / 2, boltY = 9 * unit - height / 2;
                 using var bolt = new GraphicsPath();
                 bolt.AddPolygon(new[] { new PointF(boltX + width * .62f, boltY), new PointF(boltX, boltY + height * .56f), new PointF(boltX + width * .45f, boltY + height * .56f), new PointF(boltX + width * .38f, boltY + height), new PointF(boltX + width, boltY + height * .42f), new PointF(boltX + width * .55f, boltY + height * .42f) });
-                // A clear gap around the bolt so it reads over the fill, then the bolt itself
-                graphics.CompositingMode = CompositingMode.SourceCopy;
-                using (var clearPen = new Pen(Color.Transparent, 2.2f * unit) { LineJoin = LineJoin.Round }) { graphics.DrawPath(clearPen, bolt); using var clearBrush = new SolidBrush(Color.Transparent); graphics.FillPath(clearBrush, bolt); }
-                graphics.CompositingMode = CompositingMode.SourceOver;
                 graphics.FillPath(inkBrush, bolt);
             }
-            if (hasDot) { using var dotBrush = new SolidBrush(dotColour); graphics.FillEllipse(dotBrush, 22 * unit, 21.5f * unit, 10 * unit, 10 * unit); }
-            if (question) { using var amber = new SolidBrush(Color.FromArgb(224, 145, 47)); graphics.FillEllipse(amber, 23.5f * unit, 2 * unit, 8 * unit, 8 * unit); }
+            if (TryColour(dotColour, out var colour)) Dot(graphics, colour, 26.5f * unit, 26 * unit, 5.2f * unit, 0);
         }
         var bitmap = new Bitmap(size, size, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
         using (var graphics = Graphics.FromImage(bitmap)) { graphics.InterpolationMode = InterpolationMode.HighQualityBicubic; graphics.PixelOffsetMode = PixelOffsetMode.HighQuality; graphics.CompositingQuality = CompositingQuality.HighQuality; graphics.DrawImage(canvas, new Rectangle(0, 0, size, size)); }
         return bitmap;
+    }
+
+    // A dot with a clear ring cut around it, so it never merges into the battery outline
+    static void Dot(Graphics graphics, Color colour, float centreX, float centreY, float radius, float ring)
+    {
+        using var circle = new GraphicsPath(); circle.AddEllipse(centreX - radius, centreY - radius, radius * 2, radius * 2);
+        if (ring > 0) Clear(graphics, circle, ring * 2);
+        using var brush = new SolidBrush(colour); graphics.FillPath(brush, circle);
+    }
+
+    // Makes a shape and a band around it transparent
+    static void Clear(Graphics graphics, GraphicsPath shape, float band)
+    {
+        graphics.CompositingMode = CompositingMode.SourceCopy;
+        using (var clearPen = new Pen(Color.Transparent, band) { LineJoin = LineJoin.Round }) graphics.DrawPath(clearPen, shape);
+        using (var clearBrush = new SolidBrush(Color.Transparent)) graphics.FillPath(clearBrush, shape);
+        graphics.CompositingMode = CompositingMode.SourceOver;
     }
 
     static bool TryColour(string colour, out Color result) { result = Color.Empty; if (colour == "") return false; try { result = ColorTranslator.FromHtml(colour); return true; } catch { return false; } }
