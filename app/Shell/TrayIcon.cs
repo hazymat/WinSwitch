@@ -15,13 +15,19 @@ public sealed class TrayIcon : IDisposable
     string seenUpdate = ""; // the ready version the user has seen explained; it flashes until then, then stays solid blue
     bool UpdateUnseen => App.Updater.ReadyVersion != "" && seenUpdate != App.Updater.ReadyVersion;
     ToolStripMenuItem? updateItem; // flashes with the icon while the menu is open
-    readonly Image blueDot = Dot("#4CC2FF"), amberDot = Dot("#E0912F"), noDot = new Bitmap(12, 12);
+    readonly Image blueDot = Dot("#4CC2FF"), amberDot = Dot("#E0912F"), noDot = new Bitmap(64, 64);
     readonly System.Windows.Threading.DispatcherTimer batteryTimer = new() { Interval = TimeSpan.FromMinutes(1) }; // the fill follows the charge
     App App => App.Instance;
 
     public TrayIcon()
     {
         trayMenu.Opening += (sender, args) => BuildMenu();
+        // Bold and small rows get their fonts once the menu is on its screen, from the menu's own font: fonts set earlier keep the main screen's scaling and come out tiny on a 200% screen
+        trayMenu.Opened += (sender, args) =>
+        {
+            var menuFont = trayMenu.Font;
+            foreach (ToolStripItem item in trayMenu.Items) { if (item.Tag is "bold") item.Font = new Font(menuFont, FontStyle.Bold); else if (item.Tag is "small") item.Font = new Font(menuFont.FontFamily, menuFont.Size * 0.85f); }
+        };
         notifyIcon = new NotifyIcon { Text = "WinSwitch", ContextMenuStrip = trayMenu, Visible = true };
         // Left-click explains a waiting dot first (the question, or the update card), otherwise opens the same menu (the profiles are the point)
         notifyIcon.MouseUp += (sender, args) =>
@@ -44,7 +50,7 @@ public sealed class TrayIcon : IDisposable
         trayMenu.Items.Clear();
         var engine = App.Engine; var settings = App.Settings;
         // The version, just the number, in a small shaded row at the top
-        trayMenu.Items.Add(new ToolStripMenuItem(App.Updater.CurrentVersion) { Enabled = false, BackColor = Color.FromArgb(236, 236, 236), Font = new Font(SystemFonts.MenuFont ?? Control.DefaultFont, FontStyle.Regular) });
+        trayMenu.Items.Add(new ToolStripMenuItem(App.Updater.CurrentVersion) { Enabled = false, BackColor = Color.FromArgb(236, 236, 236), Tag = "small" });
         // The same dots as the tray icon, so a flashing blue or amber dot leads to its explanation (Mat 18 Nov)
         updateItem = null;
         if (App.Updater.ReadyVersion != "") { updateItem = Bold($"Restart to update to {App.Updater.ReadyVersion}", async () => await App.Updater.RestartToUpdateAsync()); updateItem.Image = blueDot; trayMenu.Items.Add(updateItem); }
@@ -63,7 +69,7 @@ public sealed class TrayIcon : IDisposable
         foreach (var profile in settings.Profiles)
         {
             var item = new ToolStripMenuItem(profile.Name, Dot(profile.Colour), (sender, args) => engine.HoldProfile(profile.Id)) { Checked = !settings.Power.Paused && engine.ActiveProfile?.Id == profile.Id };
-            if (item.Checked) item.Font = new Font(item.Font, FontStyle.Bold);
+            if (item.Checked) item.Tag = "bold";
             trayMenu.Items.Add(item);
         }
         if (settings.Tweaks.Count > 0)
@@ -95,7 +101,7 @@ public sealed class TrayIcon : IDisposable
         trayMenu.Items.Add("Quit", null, (sender, args) => App.Quit());
     }
 
-    static ToolStripMenuItem Bold(string text, Action action) { var item = new ToolStripMenuItem(text, null, (sender, args) => action()); item.Font = new Font(item.Font, FontStyle.Bold); return item; }
+    static ToolStripMenuItem Bold(string text, Action action) => new(text, null, (sender, args) => action()) { Tag = "bold" };
     static string AwakeLabel() => PowerActions.AwakeUntil == DateTime.MaxValue ? "Keeping awake" : $"Keeping awake until {PowerActions.AwakeUntil:HH:mm}";
     static bool Confirm(string question) => System.Windows.MessageBox.Show(question, "WinSwitch", System.Windows.MessageBoxButton.OKCancel, System.Windows.MessageBoxImage.Question) == System.Windows.MessageBoxResult.OK;
 
@@ -134,9 +140,9 @@ public sealed class TrayIcon : IDisposable
 
     static Image Dot(string colour)
     {
-        var bitmap = new Bitmap(12, 12);
+        var bitmap = new Bitmap(64, 64); // large and scaled down by the menu, so it stays sharp at any scaling
         using var graphics = Graphics.FromImage(bitmap); graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
-        try { using var brush = new SolidBrush(ColorTranslator.FromHtml(colour)); graphics.FillEllipse(brush, 1, 1, 10, 10); } catch { }
+        try { using var brush = new SolidBrush(ColorTranslator.FromHtml(colour)); graphics.FillEllipse(brush, 8, 8, 48, 48); } catch { }
         return bitmap;
     }
 
