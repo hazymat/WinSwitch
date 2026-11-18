@@ -95,6 +95,7 @@ public class GeneralSettings
     public bool WizardDone { get; set; }
     public bool AskBeforeClosing { get; set; } = true; // apps with a window ask on the switching panel first
     public List<string> IgnoredThings { get; set; } = new(); // docks and monitors you said to ignore
+    public List<string> KnownThings { get; set; } = new(); // every monitor, adapter and device ever seen, so a new dock is asked about once
 }
 
 // Remote control: the phone page (and Shortcuts) and MQTT for Home Assistant (SPEC.md › Remote control)

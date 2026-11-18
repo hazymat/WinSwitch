@@ -22,12 +22,19 @@ public sealed class AppStopper
     public async Task<bool> ApplyAsync(Profile? profile, bool pluggedIn)
     {
         var wanted = Wanted(profile, pluggedIn);
-        lastWanted ??= new HashSet<string>(Settings.Power.Stopped.Select(app => app.Path), StringComparer.OrdinalIgnoreCase); // after a restart, what was stopped counts as handled
+        if (lastWanted == null)
+        {
+            // Stopped before this sign-in: Windows has started its own apps again, so starting them too would run two (two Syncthings fight over one database). Forget them; the profile stops them afresh
+            var signedInAt = SignedInAt();
+            if (Settings.Power.Stopped.RemoveAll(app => app.StoppedAt < signedInAt) > 0) Settings.Save();
+            lastWanted = new HashSet<string>(Settings.Power.Stopped.Select(app => app.Path), StringComparer.OrdinalIgnoreCase); // after WinSwitch restarts (an update), what was stopped counts as handled
+        }
         var newlyWanted = wanted.Where(path => !lastWanted.Contains(path)).ToList();
         var toStart = Settings.Power.Stopped.Where(app => !wanted.Contains(app.Path)).ToList();
         lastWanted = wanted;
         if (newlyWanted.Count == 0 && toStart.Count == 0) return false;
         var running = await Task.Run(AppCatalog.RunningByPath);
+        foreach (var app in toStart.Where(app => running.ContainsKey(app.Path)).ToList()) { toStart.Remove(app); Forget(app.Path); Log($"{app.Name} was already running again"); } // started by hand meanwhile: never a second copy
         var toStop = newlyWanted.Where(running.ContainsKey).ToList();
         if (toStop.Count == 0 && toStart.Count == 0) return false;
         var starts = await Task.Run(() => AppCatalog.StartsWithWindows(includeAllTasks: true)); // to tell how each one was started
@@ -184,6 +191,15 @@ public sealed class AppStopper
     {
         foreach (var app in settings.Power.Stopped.ToList()) { try { StartAgainAsync(app).Wait(TimeSpan.FromSeconds(20)); } catch { } }
         settings.Power.Stopped.Clear(); settings.Save();
+    }
+
+    // When this Windows sign-in began: the later of boot and this session's own shell starting (Fast startup keeps the boot clock running across shut downs)
+    static DateTime SignedInAt()
+    {
+        var bootedAt = DateTime.Now - TimeSpan.FromMilliseconds(Environment.TickCount64);
+        var session = Process.GetCurrentProcess().SessionId; var shellStarts = new List<DateTime>();
+        foreach (var name in new[] { "sihost", "explorer" }) foreach (var process in Process.GetProcessesByName(name)) using (process) { try { if (process.SessionId == session) shellStarts.Add(process.StartTime); } catch { } }
+        return shellStarts.Count > 0 && shellStarts.Min() > bootedAt ? shellStarts.Min() : bootedAt;
     }
 
     static void Log(string line) { try { File.AppendAllText(Path.Combine(AppPaths.LogsFolder, "apps.log"), $"{DateTime.Now:yyyy-MM-dd HH:mm:ss}  {line}{Environment.NewLine}"); } catch { } }

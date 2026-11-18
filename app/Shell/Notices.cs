@@ -110,9 +110,9 @@ public sealed class NoticeCard : Window
     public void ShowAt(double above)
     {
         Opacity = 0; Show();
-        var area = SystemParameters.WorkArea;
-        Left = area.Right - Width - 6;
-        var finalTop = area.Bottom - ActualHeight - 6 - above;
+        var corner = Corner.BottomRight(this);
+        Left = corner.X - Width - 6;
+        var finalTop = corner.Y - ActualHeight - 6 - above;
         Top = finalTop + 18;
         BeginAnimation(TopProperty, new DoubleAnimation(finalTop, TimeSpan.FromMilliseconds(220)) { EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } });
         BeginAnimation(OpacityProperty, new DoubleAnimation(1, TimeSpan.FromMilliseconds(180)));

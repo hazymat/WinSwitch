@@ -80,7 +80,15 @@ public sealed class Engine
             if (previous != null)
             {
                 var appeared = inventory.Things.Where(thing => !previous.Things.ContainsKey(thing.Key)).ToDictionary(thing => thing.Key, thing => thing.Value);
-                if (appeared.Count > 0) { ThingsAppeared?.Invoke(inventory, appeared); AskAboutNewDock(appeared); }
+                if (appeared.Count > 0) ThingsAppeared?.Invoke(inventory, appeared);
+            }
+            // Asked about anything never seen before, also when it was plugged in while WinSwitch wasn't running (asleep, restarting). A fresh install with no situations yet just records what's there
+            var neverSeen = inventory.Things.Where(thing => !Settings.General.KnownThings.Contains(thing.Key)).ToDictionary(thing => thing.Key, thing => thing.Value);
+            if (neverSeen.Count > 0)
+            {
+                var freshInstall = Settings.General.KnownThings.Count == 0 && Settings.Situations.Count == 0;
+                Settings.General.KnownThings.AddRange(neverSeen.Keys); Settings.Save();
+                if (!freshInstall) AskAboutNewDock(neverSeen);
             }
         }
         if (Settings.Power.Paused) { ActiveProfile = null; ActiveTweaks = new(); await App.Apps.ApplyAsync(null, PluggedIn); Changed?.Invoke(); return; }
@@ -321,9 +329,9 @@ public sealed class Engine
 
     void AskAboutNewDock(Dictionary<string, string> appeared)
     {
-        var dockLike = DockLike(appeared);
-        if (dockLike.Count == 0 || dockLike.Keys.All(Settings.General.IgnoredThings.Contains)) return;
-        if (Settings.Situations.Any(situation => dockLike.Keys.Any(situation.Things.ContainsKey))) return;
+        // Only what no situation knows yet: a new dock at the same desk still asks, even though the monitor on it is already part of Desk
+        var dockLike = DockLike(appeared).Where(thing => !Settings.General.IgnoredThings.Contains(thing.Key) && !Settings.Situations.Any(situation => situation.Things.ContainsKey(thing.Key))).ToDictionary(thing => thing.Key, thing => thing.Value);
+        if (dockLike.Count == 0) return;
         var names = string.Join(", ", dockLike.Values.Distinct().Take(3));
         var isDock = dockLike.Count > 1 || dockLike.Keys.Any(key => key.StartsWith("net:"));
         App.Notices.Ask("newdock:" + string.Join(",", dockLike.Keys), isDock ? "New dock connected" : "New monitor connected", $"{names}. What should it use?", new()
