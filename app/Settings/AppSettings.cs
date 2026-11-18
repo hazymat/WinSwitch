@@ -44,6 +44,7 @@ public class StoppedApp
     public string WorkingFolder { get; set; } = "";
     public bool Elevated { get; set; }
     public DateTime StoppedAt { get; set; } = DateTime.Now;
+    public string StartedBy { get; set; } = ""; // another app this profile stops that launched this one (SyncTrayzor starts Syncthing): it comes back with that app, never on its own
 }
 
 // A few settings laid over whichever profile is on, e.g. Night (SPEC.md › Tweaks)

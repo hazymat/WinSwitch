@@ -35,6 +35,7 @@ public sealed class AppStopper
         if (newlyWanted.Count == 0 && toStart.Count == 0) return false;
         var running = await Task.Run(AppCatalog.RunningByPath);
         foreach (var app in toStart.Where(app => running.ContainsKey(app.Path)).ToList()) { toStart.Remove(app); Forget(app.Path); Log($"{app.Name} was already running again"); } // started by hand meanwhile: never a second copy
+        foreach (var app in toStart.Where(app => ComesBackWithParent(app, toStart, running)).ToList()) { toStart.Remove(app); Forget(app.Path); Log($"{app.Name} comes back with {Path.GetFileNameWithoutExtension(app.StartedBy)}"); }
         var toStop = newlyWanted.Where(running.ContainsKey).ToList();
         if (toStop.Count == 0 && toStart.Count == 0) return false;
         var starts = await Task.Run(() => AppCatalog.StartsWithWindows(includeAllTasks: true)); // to tell how each one was started
@@ -54,6 +55,7 @@ public sealed class AppStopper
             var processes = running[path];
             var root = processes.FirstOrDefault(process => !processes.Any(other => other.ProcessId == process.ParentId)) ?? processes[0];
             var record = AppCatalog.Describe(root, starts);
+            record.StartedBy = wanted.FirstOrDefault(other => !other.Equals(path, StringComparison.OrdinalIgnoreCase) && running.TryGetValue(other, out var parents) && parents.Any(parent => parent.ProcessId == root.ParentId)) ?? "";
             if (processes.Any(process => process.HasWindow) && Settings.General.AskBeforeClosing)
             {
                 thisPanel.AddPrompt(path, $"{record.Name} is open. Close it?", async row =>
@@ -90,8 +92,12 @@ public sealed class AppStopper
     // "Start them now" on the panel, and Restore everything: started again and not stopped again until the next switch
     public async Task StartTheseAgainAsync(List<StoppedApp> apps)
     {
-        foreach (var app in apps) { await StartAgainAsync(app); Forget(app.Path); }
+        var running = await Task.Run(AppCatalog.RunningByPath);
+        foreach (var app in apps) { if (!running.ContainsKey(app.Path) && !ComesBackWithParent(app, apps, running)) await StartAgainAsync(app); Forget(app.Path); }
     }
+
+    // Launched by another app being started too, or already running (SyncTrayzor's Syncthing): starting it as well would run two, and the second can't open Syncthing's database
+    static bool ComesBackWithParent(StoppedApp app, List<StoppedApp> starting, Dictionary<string, List<AppCatalog.RunningProcess>> running) => app.StartedBy != "" && (running.ContainsKey(app.StartedBy) || starting.Any(other => other.Path.Equals(app.StartedBy, StringComparison.OrdinalIgnoreCase)));
     public Task StartEverythingAgainAsync() { lastWanted = new(StringComparer.OrdinalIgnoreCase); return StartTheseAgainAsync(Settings.Power.Stopped.ToList()); }
 
     // ---- Stopping: asked to close the way Windows does (WM_CLOSE to its windows, Ctrl+C to console apps), then ended after 10 s ----
@@ -189,7 +195,8 @@ public sealed class AppStopper
     // Uninstall and Restore everything: synchronous, without the app running
     public static void StartAllAgain(AppSettings settings)
     {
-        foreach (var app in settings.Power.Stopped.ToList()) { try { StartAgainAsync(app).Wait(TimeSpan.FromSeconds(20)); } catch { } }
+        var stopped = settings.Power.Stopped.ToList(); var running = AppCatalog.RunningByPath();
+        foreach (var app in stopped.Where(app => !running.ContainsKey(app.Path) && !ComesBackWithParent(app, stopped, running))) { try { StartAgainAsync(app).Wait(TimeSpan.FromSeconds(20)); } catch { } }
         settings.Power.Stopped.Clear(); settings.Save();
     }
 
