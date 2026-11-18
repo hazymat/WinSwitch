@@ -77,9 +77,10 @@ public sealed class Engine
             var previous = lastInventory;
             var inventory = await Task.Run(Inventory.Take);
             lastInventory = inventory;
+            Dictionary<string, string>? appeared = null;
             if (previous != null)
             {
-                var appeared = inventory.Things.Where(thing => !previous.Things.ContainsKey(thing.Key)).ToDictionary(thing => thing.Key, thing => thing.Value);
+                appeared = inventory.Things.Where(thing => !previous.Things.ContainsKey(thing.Key)).ToDictionary(thing => thing.Key, thing => thing.Value);
                 if (appeared.Count > 0) ThingsAppeared?.Invoke(inventory, appeared);
             }
             // Asked about anything never seen before, also when it was plugged in while WinSwitch wasn't running (asleep, restarting). A fresh install with no situations yet just records what's there
@@ -88,7 +89,8 @@ public sealed class Engine
             {
                 var freshInstall = Settings.General.KnownThings.Count == 0 && Settings.Situations.Count == 0;
                 Settings.General.KnownThings.AddRange(neverSeen.Keys); Settings.Save();
-                if (!freshInstall) AskAboutNewDock(neverSeen);
+                // What the dock brought: everything that appeared with it when plugged in now, or only its monitors and network adapter when it was already there at start (the laptop's own Wi-Fi, camera and Bluetooth are never part of a dock)
+                if (!freshInstall) AskAboutNewDock(neverSeen, appeared is { Count: > 0 } ? appeared : DockLike(neverSeen));
             }
         }
         if (Settings.Power.Paused) { ActiveProfile = null; ActiveTweaks = new(); await App.Apps.ApplyAsync(null, PluggedIn); Changed?.Invoke(); return; }
@@ -130,7 +132,7 @@ public sealed class Engine
         {
             var matched = situation.Kind switch
             {
-                "dock" => situation.Things.Count > 0 && situation.Things.Keys.Count(inventory.Things.ContainsKey) >= Math.Max(1, (int)Math.Ceiling(situation.Things.Count * 0.6)),
+                "dock" => DockMatches(situation, inventory),
                 "network" => inventory.NetworkThing != "" && situation.Things.ContainsKey(inventory.NetworkThing),
                 "battery" => !pluggedIn && batteryPercent < situation.BatteryBelow,
                 _ => situation.Things.Keys.Any(inventory.Things.ContainsKey),
@@ -324,11 +326,21 @@ public sealed class Engine
         });
     }
 
+    // A dock with a monitor is connected when one of its monitors is (Mat 18 Nov: the monitor is what counts, not the network adapter, hubs or power).
+    // A dock with no monitor (USB only) still matches on most of its things
+    static bool DockMatches(Situation situation, Inventory inventory)
+    {
+        var monitors = situation.Things.Keys.Where(thing => thing.StartsWith("monitor:")).ToList();
+        if (monitors.Count > 0) return monitors.Any(inventory.Things.ContainsKey);
+        return situation.Things.Count > 0 && situation.Things.Keys.Count(inventory.Things.ContainsKey) >= Math.Max(1, (int)Math.Ceiling(situation.Things.Count * 0.6));
+    }
+
     // ---- A dock or monitor never seen before (SPEC.md › Notifications) ----
     public static Dictionary<string, string> DockLike(Dictionary<string, string> things) => things.Where(thing => thing.Key.StartsWith("monitor:") || thing.Key.StartsWith("net:") && (thing.Value.Contains("USB", StringComparison.OrdinalIgnoreCase) || thing.Value.Contains("Thunderbolt", StringComparison.OrdinalIgnoreCase) || thing.Value.Contains("Dock", StringComparison.OrdinalIgnoreCase))).ToDictionary(thing => thing.Key, thing => thing.Value);
 
-    void AskAboutNewDock(Dictionary<string, string> appeared)
+    void AskAboutNewDock(Dictionary<string, string> neverSeen, Dictionary<string, string> dockThings)
     {
+        var appeared = neverSeen;
         // Only what no situation knows yet: a new dock at the same desk still asks, even though the monitor on it is already part of Desk
         var dockLike = DockLike(appeared).Where(thing => !Settings.General.IgnoredThings.Contains(thing.Key) && !Settings.Situations.Any(situation => situation.Things.ContainsKey(thing.Key))).ToDictionary(thing => thing.Key, thing => thing.Value);
         if (dockLike.Count == 0) return;
@@ -336,8 +348,8 @@ public sealed class Engine
         var isDock = dockLike.Count > 1 || dockLike.Keys.Any(key => key.StartsWith("net:"));
         App.Notices.Ask("newdock:" + string.Join(",", dockLike.Keys), isDock ? "New dock connected" : "New monitor connected", $"{names}. What should it use?", new()
         {
-            ("Set up new profile", () => App.SetUpNewPlace(isDock ? "New dock" : dockLike.Values.First(), appeared)),
-            ($"Use {ActiveProfile?.Name ?? "this profile"}", () => { if (ActiveProfile == null) return; Settings.Situations.Insert(0, new Situation { Kind = "dock", Name = isDock ? "Dock" : dockLike.Values.First(), Things = appeared, ProfileId = ActiveProfile.Id }); Settings.Save(); App.NotifySettingsChanged(); EvaluateSoon(); }),
+            ("Set up new profile", () => App.SetUpNewPlace(isDock ? "New dock" : dockLike.Values.First(), dockThings)),
+            ($"Use {ActiveProfile?.Name ?? "this profile"}", () => { if (ActiveProfile == null) return; Settings.Situations.Insert(0, new Situation { Kind = "dock", Name = isDock ? "Dock" : dockLike.Values.First(), Things = dockThings, ProfileId = ActiveProfile.Id }); Settings.Save(); App.NotifySettingsChanged(); EvaluateSoon(); }),
             ("Ignore", () => { Settings.General.IgnoredThings.AddRange(dockLike.Keys); Settings.Save(); }),
         });
     }
