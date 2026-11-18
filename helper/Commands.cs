@@ -20,7 +20,7 @@ static class Commands
     const string FastStartupKey = @"HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Session Manager\Power", HibernateKey = @"HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Power";
     static string OriginalPath => Path.Combine(Program.DataFolder, "helper-original.json");
 
-    static readonly HashSet<string> adminOnly = new HashSet<string> { "service", "end-process", "run-task", "firewall", "uninstall", "hibernate", "fast-startup" };
+    static readonly HashSet<string> adminOnly = new HashSet<string> { "service", "end-process", "run-task", "firewall", "uninstall", "hibernate", "fast-startup", "sign-in-on-wake" };
 
     public static object Do(string command, Dictionary<string, object> request, bool callerIsAdmin)
     {
@@ -43,6 +43,7 @@ static class Commands
             case "run-task": return RunTask(Text("path"));
             case "power": return Power(Text("action"));
             case "firewall": return Firewall(Number("port"), request.TryGetValue("program", out var program) ? program as string : null, On());
+            case "sign-in-on-wake": return SignInOnWake(Text("plan"), Number("ac"), Number("dc"));
             case "restore": Restore(); return true;
             case "uninstall": Restore(); System.Threading.Tasks.Task.Delay(500).ContinueWith(_ => Program.ScheduleRemoval()); return true;
             default: throw new Exception($"Unknown command {command}");
@@ -237,4 +238,14 @@ static class Commands
         if (program == null || program.IndexOf('"') >= 0 || !program.EndsWith(@"\WinSwitch.exe", StringComparison.OrdinalIgnoreCase) || !File.Exists(program)) throw new Exception("Bad program");
         return Program.Run("netsh.exe", $"advfirewall firewall add rule name=\"WinSwitch phone page\" dir=in action=allow protocol=TCP localport={port} profile=private program=\"{program}\"").exitCode == 0;
     }
+
+    // Sign in after waking (CONSOLELOCK) for one plan; Windows lets only an administrator change it. -1 = leave that side
+    static bool SignInOnWake(string plan, int ac, int dc)
+    {
+        if (!Guid.TryParse(plan, out var scheme)) throw new Exception("Not a power plan");
+        if (ac is 0 or 1) { var result = Program.Run("powercfg.exe", $"/setacvalueindex {scheme} SUB_NONE CONSOLELOCK {ac}"); if (result.exitCode != 0) throw new Exception(result.output.Trim()); }
+        if (dc is 0 or 1) { var result = Program.Run("powercfg.exe", $"/setdcvalueindex {scheme} SUB_NONE CONSOLELOCK {dc}"); if (result.exitCode != 0) throw new Exception(result.output.Trim()); }
+        return true;
+    }
 }
+

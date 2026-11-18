@@ -27,6 +27,7 @@ public partial class SettingsWindow
     // ---- Phone and Shortcuts ----
     // Only on these networks: the phone page stops listening anywhere else (a café, a hotel), so nobody there can reach it (Mat 18 Nov)
     // Tick the Wi-Fi networks (Windows' saved ones) where the phone page may answer; a wired network can be added while on it
+    bool networksOpen; string networksSearch = ""; // kept while the page is rebuilt
     StackPanel NetworksCard()
     {
         var card = new StackPanel(); var phone = App.Phone;
@@ -41,14 +42,24 @@ public partial class SettingsWindow
         if (!Remote.OnlyOnNetworks) { card.Children.Add(Text("Off: the phone page answers on any network marked Private in Windows.", 12.5, false, quietBrush, new Thickness(0, 4, 0, 0))); return card; }
         var wifiNames = WifiNetworks.Saved().Concat(Remote.Networks.Keys.Where(key => key.StartsWith("wifi:")).Select(key => key[5..])).Distinct(StringComparer.OrdinalIgnoreCase)
             .OrderBy(name => !name.Equals(phone.Wifi, StringComparison.OrdinalIgnoreCase)).ThenBy(name => !Remote.Networks.ContainsKey("wifi:" + name)).ThenBy(name => name, StringComparer.OrdinalIgnoreCase).ToList();
-        var list = new StackPanel();
+        // Folded by default, header names the ticked ones; search as you type, since Windows can remember dozens of networks (Mat 18 Nov)
+        var list = new StackPanel(); var boxes = new List<CheckBox>();
+        var expander = new Expander { Style = (Style)FindResource("More"), Margin = new Thickness(20, 8, 0, 0), IsExpanded = networksOpen };
+        void Header() { var ticked = wifiNames.Where(name => Remote.Networks.ContainsKey("wifi:" + name)).ToList(); expander.Header = $"Wi-Fi networks ({(ticked.Count == 0 ? "none ticked" : ticked.Count <= 2 ? string.Join(", ", ticked) : $"{ticked[0]}, {ticked[1]} and {ticked.Count - 2} more")})"; }
         foreach (var name in wifiNames)
         {
-            var box = new CheckBox { Content = name + (name.Equals(phone.Wifi, StringComparison.OrdinalIgnoreCase) ? "  (connected now)" : ""), IsChecked = Remote.Networks.ContainsKey("wifi:" + name), Margin = new Thickness(0, 6, 0, 0) };
-            box.Click += (sender, args) => { if (box.IsChecked == true) Remote.Networks["wifi:" + name] = name; else Remote.Networks.Remove("wifi:" + name); Settings.Save(); phone.Apply(); if (name.Equals(phone.Wifi, StringComparison.OrdinalIgnoreCase)) FillPhone(); }; // the status above changes
-            list.Children.Add(box);
+            var box = new CheckBox { Content = name + (name.Equals(phone.Wifi, StringComparison.OrdinalIgnoreCase) ? "  (connected now)" : ""), Tag = name, Foreground = Brushes.Black, IsChecked = Remote.Networks.ContainsKey("wifi:" + name), Margin = new Thickness(0, 6, 0, 0) };
+            box.Click += (sender, args) => { if (box.IsChecked == true) Remote.Networks["wifi:" + name] = name; else Remote.Networks.Remove("wifi:" + name); Settings.Save(); phone.Apply(); Header(); if (name.Equals(phone.Wifi, StringComparison.OrdinalIgnoreCase)) FillPhone(); }; // the status above changes
+            list.Children.Add(box); boxes.Add(box);
         }
-        if (wifiNames.Count > 0) card.Children.Add(new ScrollViewer { Content = list, MaxHeight = 230, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Margin = new Thickness(20, 2, 0, 0) });
+        var noMatch = Text("No saved network matches.", 12.5, false, quietBrush, new Thickness(0, 6, 0, 0)); list.Children.Add(noMatch);
+        var searchBox = new TextBox { Text = networksSearch, Width = 260, Padding = new Thickness(4, 2, 4, 2) };
+        var searchHint = Text("Search networks", 13, false, quietBrush, new Thickness(7, 3, 0, 0)); searchHint.IsHitTestVisible = false;
+        void Filter() { networksSearch = searchBox.Text.Trim(); foreach (var box in boxes) box.Visibility = ((string)box.Tag).Contains(networksSearch, StringComparison.OrdinalIgnoreCase) ? Visibility.Visible : Visibility.Collapsed; noMatch.Visibility = boxes.Any(box => box.Visibility == Visibility.Visible) ? Visibility.Collapsed : Visibility.Visible; searchHint.Visibility = searchBox.Text == "" ? Visibility.Visible : Visibility.Collapsed; }
+        searchBox.TextChanged += (sender, args) => Filter(); Filter(); Header();
+        expander.Expanded += (sender, args) => { networksOpen = true; searchBox.Focus(); }; expander.Collapsed += (sender, args) => networksOpen = false;
+        expander.Content = new StackPanel { Margin = new Thickness(0, 6, 0, 0), Children = { new Grid { HorizontalAlignment = HorizontalAlignment.Left, Children = { searchBox, searchHint } }, new ScrollViewer { Content = list, MaxHeight = 230, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Margin = new Thickness(0, 2, 0, 0) } } };
+        if (wifiNames.Count > 0) card.Children.Add(expander);
         foreach (var (thing, name) in Remote.Networks.Where(network => network.Key.StartsWith("network:")).ToList())
         {
             var row = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(20, 8, 0, 0), Children = { Text(name, 13, false, null, new Thickness(0, 3, 8, 0)) } };

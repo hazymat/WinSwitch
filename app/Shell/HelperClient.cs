@@ -94,6 +94,7 @@ public static class HelperClient
     // After installing, the device rows Windows wouldn't show before get their current values in Starting profile and Original settings (SPEC.md › Starting profile)
     public static async Task FillInSettingsAsync()
     {
+        App.Instance.Engine.NotSupported.Remove("signInOnWake"); // Windows only refused it for want of admin rights
         var snapshot = App.Instance.Snapshot; var starting = App.Instance.Settings.Profiles.FirstOrDefault(profile => profile.IsStarting);
         foreach (var setting in Power.Catalog.All.Where(setting => setting.Kind == Power.SettingKind.Helper))
         {

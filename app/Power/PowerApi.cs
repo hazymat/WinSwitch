@@ -68,6 +68,7 @@ public static class PowerApi
         var hasBattery = (status.BatteryFlag & 128) == 0 && status.BatteryFlag != 255;
         return (status.ACLineStatus != 0, status.BatteryLifePercent == 255 ? 100 : status.BatteryLifePercent, hasBattery);
     }
+    public static bool ModernStandby() { try { return GetPwrCapabilities(out var capabilities) && capabilities.AoAc != 0; } catch { return false; } } // the screen going off is the PC's sleep
     public static bool CanHibernate() { try { return GetPwrCapabilities(out var capabilities) && capabilities.HiberFilePresent != 0; } catch { return false; } }
 
     public static bool Sleep(bool hibernate) => SetSuspendState(hibernate, false, false);
