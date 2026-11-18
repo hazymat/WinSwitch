@@ -24,8 +24,7 @@ public sealed class PhoneServer
 
     public PhoneServer()
     {
-        networkTimer.Tick += async (sender, args) => { networkTimer.Stop(); Network = await Task.Run(Rules.Inventory.CurrentNetwork); Wifi = await Task.Run(WifiNetworks.Connected); Upgrade(); Apply(); Changed?.Invoke(); };
-        Upgrade();
+        networkTimer.Tick += async (sender, args) => { networkTimer.Stop(); Network = await Task.Run(Rules.Inventory.CurrentNetwork); Wifi = await Task.Run(WifiNetworks.Connected); Apply(); Changed?.Invoke(); };
         System.Net.NetworkInformation.NetworkChange.NetworkAddressChanged += (sender, args) => App.Dispatcher.BeginInvoke(() => { networkTimer.Stop(); networkTimer.Start(); });
     }
     public bool Running => listener != null;
@@ -40,6 +39,7 @@ public sealed class PhoneServer
 
     public void Apply()
     {
+        Upgrade(); // not in the constructor: that runs while App is being built, before Settings exist
         var remote = App.Settings.Remote;
         if (!remote.PhoneOn) { Stop(); return; }
         if (OffOnThisNetwork) { if (Running) RemoteControl.Log("phone", "network", $"off: {(Wifi != "" ? Wifi : Network.name == "" ? "no network" : Network.name)} isn't an allowed network"); Stop(); return; }
