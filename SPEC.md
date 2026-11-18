@@ -67,6 +67,8 @@ When the helper is installed, it owns remote control and profile switching (so a
 
 ## Tray
 
+The icon (Mat 18 Nov): an upright line-art battery filling the square tray slot on whole pixels (crisp like Windows' own), fill = charge (green charging, red at 20% or less), a bolt beside it that gently breathes while charging (pre-drawn frames swapped 8 times a second, only while plugged in), and one dot under the bolt: the profile's colour, amber for a question, flashing blue for an update. Windows' own battery icon is wider than the square slot apps get, so it can't be matched in width. Editable sheets for pixel pushing: project files winswitch/tray-icon/.
+
 Left-click opens the profile menu, right-click the full menu:
 
 - Shaded version row (as the siblings), plus **Update WinSwitch to x.y.z** (never "Restart", which reads as restarting Windows; Mat 18 Nov) in bold when an update is downloaded (there is no window to put the update bar in, so it lives here and in Settings › About, and the icon gets a small dot).
