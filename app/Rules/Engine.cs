@@ -18,6 +18,7 @@ public sealed class Engine
     string lastSignature = "";
     bool? lastPluggedIn;
     readonly Dictionary<string, int> volumeBeforeTweak = new();
+    readonly Dictionary<string, (int before, int set)> yoursBeforeTweak = new(); // brightness, volume, radios a tweak set that the profile leaves alone: put back when it ends
 
     public Inventory Current => lastInventory ?? new Inventory();
     public string SituationId { get; private set; } = "";
@@ -116,8 +117,10 @@ public sealed class Engine
         {
             lastSignature = signature;
             if (profile.SoundOutput != "" && !Direct.SetOutput(profile.SoundOutput)) CrashReporter.Write($"Sound output {profile.SoundOutputName} isn't plugged in; left as it is", null, false); // before volume, which applies to the default output
+            await RememberBeforeTweaksAsync(profile, tweaks, effective, pluggedIn);
             await ApplyAsync(effective, pluggedIn);
             ApplyVolumeChanges(tweaks);
+            await PutBackAfterTweaksAsync(profile, tweaks, effective, pluggedIn);
         }
         // Apps to stop: acts only when the list for this profile and power source changes; the switching panel then says what happened
         var panelShowing = await App.Apps.ApplyAsync(profile, pluggedIn);
@@ -280,6 +283,30 @@ public sealed class Engine
         if (ActiveProfile?.Values.TryGetValue("refresh", out var pair) != true) return;
         if (pluggedIn) pair!.Ac = null; else pair!.Dc = null;
         Settings.Save(); App.NotifySettingsChanged();
+    }
+
+    // Brightness, volume and the radios are yours to change, so a profile that doesn't set them leaves them alone and nothing would undo a tweak's value.
+    // Like the tweak volume change: remember the value before the tweak, put it back when the tweak ends, unless you changed it yourself in the meantime (Mat 18 Nov)
+    static int? Side(SidePair? pair, SettingDef setting, bool pluggedIn) => pair == null ? null : setting.TwoSided ? (pluggedIn ? pair.Ac : pair.Dc) : pair.Ac;
+    async Task RememberBeforeTweaksAsync(Profile profile, List<Tweak> tweaks, Dictionary<string, SidePair> effective, bool pluggedIn)
+    {
+        foreach (var key in Catalog.YoursToChange)
+        {
+            if (yoursBeforeTweak.ContainsKey(key) || Catalog.Find(key) is not { } setting || NotSupported.Contains(key)) continue;
+            if (Side(profile.Values.GetValueOrDefault(key), setting, pluggedIn) != null || !tweaks.Any(tweak => Side(tweak.Values.GetValueOrDefault(key), setting, pluggedIn) != null)) continue;
+            if (await Reader.ReadDirect(setting) is { } before && Side(effective.GetValueOrDefault(key), setting, pluggedIn) is { } set) yoursBeforeTweak[key] = (before, set);
+        }
+    }
+    async Task PutBackAfterTweaksAsync(Profile profile, List<Tweak> tweaks, Dictionary<string, SidePair> effective, bool pluggedIn)
+    {
+        foreach (var (key, (before, set)) in yoursBeforeTweak.ToList())
+        {
+            if (Catalog.Find(key) is not { } setting) { yoursBeforeTweak.Remove(key); continue; }
+            if (tweaks.Any(tweak => Side(tweak.Values.GetValueOrDefault(key), setting, pluggedIn) != null)) continue; // still tweaked
+            yoursBeforeTweak.Remove(key);
+            if (Side(profile.Values.GetValueOrDefault(key), setting, pluggedIn) != null) continue; // the profile has its own value: already written
+            if (await Reader.ReadDirect(setting) == set) await Writer.WriteDirect(setting, new SidePair { Ac = before, Dc = before }, pluggedIn);
+        }
     }
 
     void ApplyVolumeChanges(List<Tweak> tweaks)
