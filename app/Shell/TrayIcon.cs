@@ -18,7 +18,7 @@ public sealed class TrayIcon : IDisposable
     string seenUpdate = ""; // the ready version the user has seen explained; it flashes until then, then stays solid blue
     bool UpdateUnseen => App.Updater.ReadyVersion != "" && seenUpdate != App.Updater.ReadyVersion;
     ToolStripMenuItem? updateItem; // flashes while the menu is open
-    readonly Image blueDot = Dot("#4CC2FF"), amberDot = Dot("#E0912F"), noDot = new Bitmap(64, 64);
+    readonly Image blueDot = Dot(Notices.UpdateColour), amberDot = Dot(Notices.QuestionColour), noDot = new Bitmap(64, 64);
     readonly System.Windows.Threading.DispatcherTimer batteryTimer = new() { Interval = TimeSpan.FromMinutes(1) }; // the fill follows the charge
     App App => App.Instance;
 
@@ -60,7 +60,7 @@ public sealed class TrayIcon : IDisposable
         // The same dots as the tray icon, so a flashing blue or amber dot leads to its explanation (Mat 18 Nov)
         updateItem = null;
         if (App.Updater.ReadyVersion != "") { updateItem = Bold($"Update WinSwitch to {App.Updater.ReadyVersion}", async () => await App.Updater.RestartToUpdateAsync()); updateItem.Image = blueDot; trayMenu.Items.Add(updateItem); }
-        if (App.Notices.Unanswered.Count > 0) { var questionItem = Bold(App.Notices.Unanswered.Count == 1 ? "1 question waiting" : $"{App.Notices.Unanswered.Count} questions waiting", App.Notices.ShowUnanswered); questionItem.Image = amberDot; trayMenu.Items.Add(questionItem); }
+        if (App.Notices.Unanswered.Count > 0) { var questionItem = Bold(App.Notices.Unanswered.Count == 1 ? "Show message" : $"Show message ({App.Notices.Unanswered.Count} waiting)", App.Notices.ShowUnanswered); questionItem.Image = amberDot; trayMenu.Items.Add(questionItem); }
         if (settings.Power.Paused)
         {
             trayMenu.Items.Add(new ToolStripMenuItem("WinSwitch is paused: Windows' own settings are in charge") { Enabled = false });
@@ -142,7 +142,7 @@ public sealed class TrayIcon : IDisposable
         var updateWaiting = App.Updater.ReadyVersion != ""; var updateUnseen = UpdateUnseen;
         var flashing = updateUnseen || menuOpen && updateItem != null;
         if (flashing != flashTimer.Enabled) { flashOn = true; if (flashing) flashTimer.Start(); else flashTimer.Stop(); }
-        var dot = question ? "#E0912F" : updateWaiting ? (!updateUnseen || flashOn ? "#4CC2FF" : "") : colour;
+        var dot = question ? Notices.QuestionColour : updateWaiting ? (!updateUnseen || flashOn ? Notices.UpdateColour : "") : colour;
         var level = hasBattery ? Math.Clamp(percent, 0, 100) / 5 * 5 : 100;
         if (charging != pulseTimer.Enabled) { pulseStep = 0; if (charging) pulseTimer.Start(); else pulseTimer.Stop(); } // the bolt breathes while charging (plugged in, so no battery cost)
         var key = $"{dot}|{light}|{size}|{level}|{plugged}|{charging}";
@@ -165,7 +165,7 @@ public sealed class TrayIcon : IDisposable
     void ShowUpdateCard()
     {
         seenUpdate = App.Updater.ReadyVersion; Refresh();
-        App.Notices.Info("Update ready", $"WinSwitch {App.Updater.ReadyVersion} is downloaded. The blue dot stays until you update.", () => _ = App.Updater.RestartToUpdateAsync(), "Update WinSwitch now", always: true);
+        App.Notices.Info("Update ready", $"WinSwitch {App.Updater.ReadyVersion} is downloaded. The blue dot stays until you update.", () => _ = App.Updater.RestartToUpdateAsync(), "Update WinSwitch now", always: true, accent: Notices.UpdateColour);
     }
 
     // The size the taskbar shows tray icons at, from the taskbar's own scaling. SystemInformation.SmallIconSize is fixed at the scaling Windows had at sign-in, so after a dock change or restart the icon was drawn too small and blown up (fuzzy)

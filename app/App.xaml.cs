@@ -92,7 +92,7 @@ public partial class App : Application
     public void SetUpNewPlace(string name, Dictionary<string, string> things)
     {
         var source = Engine.ActiveProfile;
-        var profile = new Profile { Name = name, Colour = Templates.Colours[Settings.Profiles.Count % Templates.Colours.Length], Values = source?.Values.ToDictionary(entry => entry.Key, entry => entry.Value.Clone()) ?? new(), SpeedAc = source?.SpeedAc, SpeedDc = source?.SpeedDc };
+        var profile = new Profile { Name = name, Colour = Templates.FreeColour(Settings.Profiles), Values = source?.Values.ToDictionary(entry => entry.Key, entry => entry.Value.Clone()) ?? new(), SpeedAc = source?.SpeedAc, SpeedDc = source?.SpeedDc };
         Settings.Profiles.Add(profile);
         Settings.Situations.Insert(0, new Situation { Kind = "dock", Name = name, Things = things, ProfileId = profile.Id });
         Settings.Save(); NotifySettingsChanged();

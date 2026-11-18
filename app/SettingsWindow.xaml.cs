@@ -90,7 +90,7 @@ public partial class SettingsWindow : Window
             card.MouseLeftButtonUp += (sender, args) => { if (args.Handled) return; selectedProfileId = profile.Id; FillProfiles(); };
             profileList.Children.Add(card);
         }
-        profileList.Children.Add(Link("＋ New profile", () => { var source = Settings.ProfileById(selectedProfileId); var profile = new Profile { Name = "New profile", Colour = Templates.Colours[Settings.Profiles.Count % Templates.Colours.Length], Values = source?.IsStarting == false ? source.Values.ToDictionary(entry => entry.Key, entry => entry.Value.Clone()) : new(), SpeedAc = source?.IsStarting == false ? source.SpeedAc : null, SpeedDc = source?.IsStarting == false ? source.SpeedDc : null }; Settings.Profiles.Add(profile); selectedProfileId = profile.Id; Settings.Save(); FillProfiles(); }));
+        profileList.Children.Add(Link("＋ New profile", () => { var source = Settings.ProfileById(selectedProfileId); var profile = new Profile { Name = "New profile", Colour = Templates.FreeColour(Settings.Profiles), Values = source?.IsStarting == false ? source.Values.ToDictionary(entry => entry.Key, entry => entry.Value.Clone()) : new(), SpeedAc = source?.IsStarting == false ? source.SpeedAc : null, SpeedDc = source?.IsStarting == false ? source.SpeedDc : null }; Settings.Profiles.Add(profile); selectedProfileId = profile.Id; Settings.Save(); FillProfiles(); }));
         profileList.Children.Add(Link("✨ Set up with the wizard", App.OpenWizard));
     }
 
@@ -117,7 +117,7 @@ public partial class SettingsWindow : Window
 
     void DuplicateProfile(Profile source)
     {
-        var copy = new Profile { Name = source.IsStarting ? "My profile" : source.Name + " copy", Colour = Templates.Colours[Settings.Profiles.Count % Templates.Colours.Length], Values = source.Values.ToDictionary(entry => entry.Key, entry => entry.Value.Clone()), SpeedAc = source.SpeedAc, SpeedDc = source.SpeedDc, AppsToStop = source.AppsToStop.Select(app => new AppToStop { Path = app.Path, Name = app.Name, OnBatteryOnly = app.OnBatteryOnly }).ToList(), SoundOutput = source.SoundOutput, SoundOutputName = source.SoundOutputName };
+        var copy = new Profile { Name = source.IsStarting ? "My profile" : source.Name + " copy", Colour = Templates.FreeColour(Settings.Profiles), Values = source.Values.ToDictionary(entry => entry.Key, entry => entry.Value.Clone()), SpeedAc = source.SpeedAc, SpeedDc = source.SpeedDc, AppsToStop = source.AppsToStop.Select(app => new AppToStop { Path = app.Path, Name = app.Name, OnBatteryOnly = app.OnBatteryOnly }).ToList(), SoundOutput = source.SoundOutput, SoundOutputName = source.SoundOutputName };
         Settings.Profiles.Insert(Settings.Profiles.IndexOf(source) + 1, copy); selectedProfileId = copy.Id; Changed(); FillProfiles();
     }
 
@@ -169,6 +169,9 @@ public partial class SettingsWindow : Window
         var headRow = new DockPanel { Margin = new Thickness(0, 0, 0, 10) };
         headRow.Children.Add(new StackPanel { Orientation = Orientation.Horizontal, Children = { nameBox, swatches } });
         profileEditor.Children.Add(headRow);
+        // Allowed, but said, since the tray dot then can't tell them apart (Mat 18 Nov)
+        var sameColour = Settings.Profiles.Where(other => other.Id != profile.Id && other.Colour == profile.Colour).Select(other => other.Name).ToList();
+        if (sameColour.Count > 0) profileEditor.Children.Add(Text($"⚠ {string.Join(", ", sameColour)} already uses this colour, so the tray dot can't tell them apart.", 12, false, quietBrush, new Thickness(0, -4, 0, 10)));
         // Starting profile is locked (greyed) until Edit and a warning, so it can be trusted to mean "how it was" (Mat 17 Nov)
         var locked = profile.IsStarting && !startingUnlocked;
         if (locked)

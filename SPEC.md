@@ -80,7 +80,7 @@ Left-click opens the profile menu, right-click the full menu:
 
 - Shaded version row (as the siblings), plus **Update WinSwitch to x.y.z** (never "Restart", which reads as restarting Windows; Mat 18 Nov) in bold when an update is downloaded (there is no window to put the update bar in, so it lives here and in Settings › About, and the icon gets a small dot).
 - **Automatic** (ticked when the situation rules are choosing) with what it matched underneath in grey ("Desk dock, plugged in").
-- The profiles, one per row with their colour dot; the active one ticked. Picking one by hand holds until the next situation change (plug or unplug something), then Automatic takes over again.
+- The profiles, one per row with their colour dot (Mat 18 Nov: a new profile gets the first colour no other profile uses; picking a used one is allowed but the editor says which profile already has it; no orange, which would look like the amber question dot); the active one ticked. Picking one by hand holds until the next situation change (plug or unplug something), then Automatic takes over again.
 - **Keep awake** ▸ 30 min, 1 hour, 2 hours, Until I turn it off (stops sleep and screen off; the icon shows a small cup).
 - **Screen off now**, **Lock**, **Sleep**, **Hibernate**, **Restart**, **Shut down** (power actions in a submenu "Power").
 - **Volume** ▸ slider row and Mute (handy on servers with no keyboard volume keys).
@@ -194,6 +194,8 @@ WinSwitch's own small glass cards, sliding up just above the tray clock (as WinG
 - Suggestions (at most one a week).
 
 An unanswered question (× or ignored) waits in the tray menu ("1 question" at the top, with a dot on the icon) and in Settings, and is never lost.
+
+Colours line up (Mat 18 Nov): a coloured dot on the tray icon always leads, in one click, to a card of the same colour. Amber = a message waiting (a question closed with ×): left-click the tray icon, or right-click › "Show message", shows it as an amber card (amber header dot, "WinSwitch · Message", amber button and edge), even during Do not disturb or full screen, because it was asked for. Blue = an update: the card has a blue dot and edge. Plain cards keep the green dot.
 
 Quiet by design: info cards are skipped while a full-screen app or Presenting is on, and while Windows' Do not disturb is on; questions wait until afterwards. Several changes within a few seconds (a dock connecting in stages) make one card. Settings › General › Notifications: **Profile changes** Show (default) / Questions only / Off, and **Sound** off by default.
 

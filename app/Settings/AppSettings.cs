@@ -151,7 +151,12 @@ public class AppSettings
 
     public static AppSettings Load()
     {
-        try { return File.Exists(AppPaths.SettingsFile) ? JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(AppPaths.SettingsFile), jsonOptions) ?? new() : new(); }
+        try
+        {
+            var settings = File.Exists(AppPaths.SettingsFile) ? JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(AppPaths.SettingsFile), jsonOptions) ?? new() : new();
+            foreach (var profile in settings.Profiles) if (profile.Colour == "#E0812F") profile.Colour = "#D65DB1"; // orange retired: it looked like the amber question dot
+            return settings;
+        }
         catch { return new(); }
     }
 
