@@ -184,7 +184,7 @@ WinSwitch's own small glass cards, sliding up just above the tray clock (as WinG
 - "Desk profile on. Home dock connected." [Undo]
 - "Out and about. On battery, about 4 h 10 min left."
 - "Night tweak on until 07:00." / "Home Assistant turned on Night." (remote changes always say where they came from)
-- "Update ready." [Restart]
+- "WinSwitch 0.1.x is ready." [Update WinSwitch now] (blue; see docs/DESIGN.md)
 
 **Questions** (stay until answered or ×; one at a time, the rest wait):
 - New dock or monitor seen: "This is a new place. What should it use?" [Set up new profile] [Use Desk] [Ignore this]. "Set up" opens a two-question mini wizard (screen, sleep) with Desk's values pre-filled.
