@@ -118,7 +118,7 @@ public partial class SettingsWindow
             if (available("dimmedBrightness")) SetValue(profile, "dimmedBrightness", side, timeline.DimmedBrightness);
         };
         var panel = new StackPanel();
-        panel.Children.Add(Text("Drag the edges to change times. Drag a stage off the line to stop using it.", 12.5, false, quietBrush, new Thickness(0, -6, 0, 6)));
+        panel.Children.Add(Text("Everything your PC does once you stop using it, in order, on one line. Drag the edges to change when each step starts, drag a step off to drop it, and drag 🔒 Lock anywhere.", 12.5, false, quietBrush, new Thickness(0, -6, 0, 6)));
         panel.Children.Add(timeline);
         if (windowsLocksAt != "") panel.Children.Add(new WrapPanel { Margin = new Thickness(0, 4, 0, 0), Children =
         {
@@ -126,8 +126,15 @@ public partial class SettingsWindow
             Text(!HelperClient.Installed ? "Windows only lets WinSwitch change this with the helper (one admin prompt)." : HelperClient.NeedsUpdate(HelperClient.InstalledVersion) ? "Your helper is too old to change this. Updating it takes one admin prompt." : "A policy on this PC (often a work or school one) insists on it, so Lock can only come before Screen off.", 12.5, false, quietBrush, new Thickness(0, 3, 8, 4)),
             !HelperClient.Installed || HelperClient.NeedsUpdate(HelperClient.InstalledVersion) ? Button(HelperClient.Installed ? "Update the helper" : "Install the helper", async () => { await HelperClient.InstallAsync(); FillProfiles(); }, primary: true) : new TextBlock(),
         } });
+        // Test: the live idle timer, what's keeping it awake, try each step (Mat 19 Nov); stays open while the page is rebuilt
+        bool OnProfileInUse(string key, int value) { if (App.Engine.ActiveProfile is not { IsStarting: false } inUse) return false; SetValue(inUse, key, true, value); SetValue(inUse, key, false, value); return true; }
+        var test = new Expander { Header = "Test", Style = (Style)FindResource("More"), Margin = new Thickness(0, 10, 0, 0), IsExpanded = stepAwayTestOpen };
+        test.Expanded += (sender, args) => { stepAwayTestOpen = true; test.Content ??= new StepAwayTest(available, OnProfileInUse); }; test.Collapsed += (sender, args) => stepAwayTestOpen = false;
+        if (stepAwayTestOpen) test.Content = new StepAwayTest(available, OnProfileInUse);
+        panel.Children.Add(test);
         return panel;
     }
+    static bool stepAwayTestOpen;
 
     // Sound output: a tick, then the outputs plugged in now (plus the chosen one if it isn't); one choice for both power sources
     FrameworkElement OutputRow(Profile profile)

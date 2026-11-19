@@ -20,7 +20,7 @@ static class Commands
     const string FastStartupKey = @"HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Session Manager\Power", HibernateKey = @"HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Power";
     static string OriginalPath => Path.Combine(Program.DataFolder, "helper-original.json");
 
-    static readonly HashSet<string> adminOnly = new HashSet<string> { "service", "end-process", "run-task", "firewall", "uninstall", "hibernate", "fast-startup", "sign-in-on-wake" };
+    static readonly HashSet<string> adminOnly = new HashSet<string> { "service", "end-process", "run-task", "firewall", "uninstall", "hibernate", "fast-startup", "sign-in-on-wake", "requests-override" };
 
     public static object Do(string command, Dictionary<string, object> request, bool callerIsAdmin)
     {
@@ -43,6 +43,8 @@ static class Commands
             case "run-task": return RunTask(Text("path"));
             case "power": return Power(Text("action"));
             case "firewall": return Firewall(Number("port"), request.TryGetValue("program", out var program) ? program as string : null, On());
+            case "requests": var requests = Program.Run("powercfg.exe", "/requests"); if (requests.exitCode != 0) throw new Exception(requests.output.Trim()); return requests.output;
+            case "requests-override": return RequestsOverride(Text("type"), Text("name"), Text("requests"));
             case "sign-in-on-wake": return SignInOnWake(Text("plan"), Number("ac"), Number("dc"));
             case "restore": Restore(); return true;
             case "uninstall": Restore(); System.Threading.Tasks.Task.Delay(500).ContinueWith(_ => Program.ScheduleRemoval()); return true;
@@ -179,6 +181,8 @@ static class Commands
         Each("wakeOnLan", (adapter, value) => SetMagicPacket(adapter, value as string ?? ""));
         try { if (original.TryGetValue("hibernate", out var hibernate) && (bool)hibernate != Hibernate) Program.Run("powercfg.exe", (bool)hibernate ? "/hibernate on" : "/hibernate off"); } catch { }
         try { if (original.TryGetValue("fastStartup", out var fast) && (bool)fast != FastStartup) Registry.SetValue(FastStartupKey, "HiberbootEnabled", (bool)fast ? 1 : 0, RegistryValueKind.DWord); } catch { }
+        foreach (var entry in Overrides()) { try { var parts = entry.Split('|'); Program.Run("powercfg.exe", $"/requestsoverride {parts[0]} \"{parts[1]}\""); } catch { } }
+        SaveOverrides(new List<string>());
         Log.Write("Restored original device settings");
     }
 
@@ -247,5 +251,22 @@ static class Commands
         if (dc is 0 or 1) { var result = Program.Run("powercfg.exe", $"/setdcvalueindex {scheme} SUB_NONE CONSOLELOCK {dc}"); if (result.exitCode != 0) throw new Exception(result.output.Trim()); }
         return true;
     }
+
+    // "What's keeping it awake" › Ignore it: Windows ignores this app, service or driver's requests when deciding to turn the screen off or sleep.
+    // Every override WinSwitch adds is listed in helper-overrides.json and removed again on Restore (Remove, uninstall). Empty requests = remove it
+    static string OverridesPath => Path.Combine(Program.DataFolder, "helper-overrides.json");
+    static List<string> Overrides() { try { return File.Exists(OverridesPath) ? ((object[])new JavaScriptSerializer().DeserializeObject(File.ReadAllText(OverridesPath))).Cast<string>().ToList() : new List<string>(); } catch { return new List<string>(); } }
+    static void SaveOverrides(List<string> entries) => File.WriteAllText(OverridesPath, new JavaScriptSerializer().Serialize(entries));
+    static bool RequestsOverride(string type, string name, string requests)
+    {
+        if (type != "PROCESS" && type != "SERVICE" && type != "DRIVER") throw new Exception("Bad type");
+        if (name.Length == 0 || name.Length > 260 || name.IndexOfAny(new[] { '"', '|', '\r', '\n' }) >= 0) throw new Exception("Bad name");
+        if (requests.Split(' ').Any(request => request != "" && request != "DISPLAY" && request != "SYSTEM" && request != "AWAYMODE" && request != "EXECUTION")) throw new Exception("Bad request");
+        var result = Program.Run("powercfg.exe", $"/requestsoverride {type} \"{name}\" {requests}".TrimEnd());
+        if (result.exitCode != 0) throw new Exception(result.output.Trim());
+        var entries = Overrides(); entries.Remove(type + "|" + name); if (requests.Trim() != "") entries.Add(type + "|" + name); SaveOverrides(entries);
+        return true;
+    }
 }
+
 

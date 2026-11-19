@@ -560,6 +560,14 @@ public partial class SettingsWindow : Window
             var line = new Border { BorderBrush = lineBrush, BorderThickness = new Thickness(0, 0, 0, 1) }; Grid.SetColumnSpan(line, 4); Cell(line, row, 0);
         }
         originalPage.Children.Add(Card(new StackPanel { Children = { Text("Plugged in / on battery where they differ", 11.5, false, quietBrush, new Thickness(0, 0, 0, 6)), grid } }));
+        // Apps, services and drivers Windows was told to ignore from When I step away › Test (before, Windows listened to all of them)
+        if (Settings.Power.Ignored.Count > 0)
+        {
+            var ignored = new StackPanel { Children = { Text("Ignored when Windows decides to sleep", 14.5, true, null, new Thickness(0, 0, 0, 4)), Text("Before WinSwitch, Windows listened to all of these. Put one back and it can keep the PC awake again.", 12, false, quietBrush, new Thickness(0, 0, 0, 6)) } };
+            foreach (var entry in Settings.Power.Ignored.ToList())
+                ignored.Children.Add(new DockPanel { Margin = new Thickness(0, 4, 0, 0), Children = { Text(entry.Label, 13, false, null, new Thickness(0, 3, 10, 0)), Button("Put back", async () => { if (await HelperClient.DoAsync("requests-override", new { type = entry.Type, name = entry.Name, requests = "" })) { Settings.Power.Ignored.Remove(entry); Settings.Save(); } await FillOriginalAsync(); }) } });
+            originalPage.Children.Add(Card(ignored));
+        }
         if (snapshot.Devices.Count > 0)
         {
             var devices = new StackPanel();
