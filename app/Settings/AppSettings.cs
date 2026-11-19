@@ -133,7 +133,10 @@ public class PowerState
     public Dictionary<string, TweakOverride> TweakOverrides { get; set; } = new(); // tweak id -> on/off by hand, until its next scheduled change
     public List<StoppedApp> Stopped { get; set; } = new(); // remembered across restarts, started again on switching away
     public Dictionary<string, SidePair> LastWritten { get; set; } = new(); // plan values WinSwitch wrote, to notice changes made in Windows
+    public List<IgnoredRequest> Ignored { get; set; } = new(); // apps, services and drivers Windows was told to ignore when deciding to sleep (What's keeping it awake)
 }
+
+public class IgnoredRequest { public string Type { get; set; } = ""; public string Name { get; set; } = ""; public string Label { get; set; } = ""; public string Requests { get; set; } = ""; }
 
 public class AppSettings
 {

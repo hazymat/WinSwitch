@@ -7,7 +7,10 @@ namespace WinSwitch.Shell;
 // Tray › Power and Keep awake (SPEC.md › Tray)
 public static class PowerActions
 {
-    public static void ScreenOff() => PostMessage((IntPtr)0xFFFF, 0x0112 /* WM_SYSCOMMAND */, (IntPtr)0xF170 /* SC_MONITORPOWER */, (IntPtr)2);
+    // Screen off from the tray or the phone. On Modern Standby PCs Windows treats "monitor off" as "go to standby" (Kernel-Power 506, reason SC_MONITORPOWER),
+    // which stops music and the network; there it's a black cover with the laptop backlight off instead, and the PC stays fully on (Mat 19 Nov)
+    public static void ScreenOff() { if (PowerApi.ModernStandby()) App.Instance.Dispatcher.BeginInvoke(() => IdleWatcher.BlankNow(dark: true)); else WindowsScreenOff(); }
+    public static void WindowsScreenOff() => PostMessage((IntPtr)0xFFFF, 0x0112 /* WM_SYSCOMMAND */, (IntPtr)0xF170 /* SC_MONITORPOWER */, (IntPtr)2); // what Windows' own timer does
     public static void Lock() => LockWorkStation();
     public static void Sleep() => PowerApi.Sleep(false);
     public static void Hibernate() => PowerApi.Sleep(true);
