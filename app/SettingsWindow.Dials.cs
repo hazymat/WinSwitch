@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
@@ -123,8 +122,9 @@ public partial class SettingsWindow
         panel.Children.Add(timeline);
         if (windowsLocksAt != "") panel.Children.Add(new WrapPanel { Margin = new Thickness(0, 4, 0, 0), Children =
         {
-            Text(HelperClient.Installed ? "Windows won't let WinSwitch change this here. In Windows, set \"If you've been away\" to Never:" : "Windows only lets WinSwitch change this with the helper (one admin prompt).", 12.5, false, quietBrush, new Thickness(0, 3, 8, 4)),
-            HelperClient.Installed ? Button("Open Sign-in options", () => Process.Start(new ProcessStartInfo("ms-settings:signinoptions") { UseShellExecute = true })) : Button("Install the helper", async () => { if (await HelperClient.InstallAsync()) await App.Engine.EvaluateAsync(true); FillProfiles(); }, primary: true),
+            // Never Windows' own "If you've been away": Windows Hello greys it out (Mat 19 Nov)
+            Text(!HelperClient.Installed ? "Windows only lets WinSwitch change this with the helper (one admin prompt)." : HelperClient.NeedsUpdate(HelperClient.InstalledVersion) ? "Your helper is too old to change this. Updating it takes one admin prompt." : "A policy on this PC (often a work or school one) insists on it, so Lock can only come before Screen off.", 12.5, false, quietBrush, new Thickness(0, 3, 8, 4)),
+            !HelperClient.Installed || HelperClient.NeedsUpdate(HelperClient.InstalledVersion) ? Button(HelperClient.Installed ? "Update the helper" : "Install the helper", async () => { await HelperClient.InstallAsync(); FillProfiles(); }, primary: true) : new TextBlock(),
         } });
         return panel;
     }

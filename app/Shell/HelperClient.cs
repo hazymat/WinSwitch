@@ -37,6 +37,7 @@ public static class HelperClient
     public static bool Running { get { try { using var service = new System.ServiceProcess.ServiceController(ServiceName); return service.Status == System.ServiceProcess.ServiceControllerStatus.Running; } catch { return false; } } }
     const string ServiceName = "WinSwitchHelper";
     public static string BundledVersion => System.Diagnostics.FileVersionInfo.GetVersionInfo(ExtractBundled()).FileVersion is { } version && Version.TryParse(version, out var parsed) ? parsed.ToString(3) : "";
+    public static string InstalledVersion => System.Diagnostics.FileVersionInfo.GetVersionInfo(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "WinSwitch Helper", "WinSwitchHelper.exe")) is { FileVersion: { } version } && Version.TryParse(version, out var parsed) ? parsed.ToString(3) : ""; // without asking the service, for drawing pages
     public static bool NeedsUpdate(string installedVersion) => Version.TryParse(installedVersion, out var installed) && Version.TryParse(BundledVersion, out var bundled) && bundled > installed;
 
     static string ExtractBundled()
@@ -59,7 +60,7 @@ public static class HelperClient
         }
         catch { return false; } // admin prompt declined
         for (var attempt = 0; attempt < 20 && await VersionAsync() == ""; attempt++) await Task.Delay(250);
-        await FillInSettingsAsync();
+        await FillInSettingsAsync(); await App.Instance.Engine.EvaluateAsync(true); // settings it refused before (Sign in after waking) are tried again
         return true;
     }
 
